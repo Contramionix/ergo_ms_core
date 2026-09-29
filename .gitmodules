@@ -229,3 +229,10 @@
 	branch = dev
 	update = merge
 	ignore = all
+
+[submodule "modules/dissertation_sandbox"]
+	path = modules/dissertation_sandbox
+	url = https://github.com/ergoms/dissertation_sandbox.git
+	branch = dev
+	update = merge
+	ignore = all
