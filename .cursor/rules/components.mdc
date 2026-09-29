@@ -1,5 +1,5 @@
 ---
-description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, ToggleSwitch, TriStateSwitch, DropZone, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TabBar, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TabBar, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 alwaysApply: false
 ---
 
@@ -15,6 +15,7 @@ alwaysApply: false
 | Текстовый поиск | `SearchInput` | [`search-input.mdc`](search-input.mdc) |
 | Ввод десятичного числа (цифры, `.`/`,`) | `DecimalInput` | этот раздел |
 | Выбор даты | `DatePicker` | этот раздел |
+| Выбор времени | `TimePicker` | этот раздел |
 | Бинарный тумблер вкл/выкл | `ToggleSwitch` | этот раздел |
 | Три позиции: запрещено / не задано / разрешено | `TriStateSwitch` | этот раздел |
 | Зона выбора файлов (клик + перетаскивание) | `DropZone` | этот раздел |
@@ -60,6 +61,8 @@ alwaysApply: false
 
 `v-model` — **строка** `YYYY-MM-DD`; при `enableTime` — `YYYY-MM-DDTHH:mm`; при `monthPicker` — `YYYY-MM`. Нативный `input type="date"` не используй.
 
+Вставка даты словами («29 ноября 2024», «November 29, 2024») подставляется в числовую маску поля: `29.11.2024`, при коротком годе (`yy`) — `29.11.24`.
+
 ```vue
 <script setup>
 import DatePicker from '@/components/DatePicker.vue'
@@ -87,6 +90,31 @@ import DatePicker from '@/components/DatePicker.vue'
 | `monthPicker` | выбор месяца и года, значение `YYYY-MM` |
 | `disabled` | блокировка |
 | `invalid` | красная рамка (`is-invalid`) |
+
+## Время — TimePicker
+
+Компонент: `@/components/TimePicker.vue`. Обёртка над `@vuepic/vue-datepicker` в режиме только времени. Иконка часов стоит слева, как календарь у `DatePicker`.
+
+`v-model` — **строка** `HH:mm`. Пустая строка значит, что время не задано. Нативный `input type="time"` не используй.
+
+```vue
+<script setup>
+import TimePicker from '@/components/TimePicker.vue'
+</script>
+
+<template>
+  <TimePicker id="starts-at" v-model="startsAt" />
+  <TimePicker id="starts-at-pick" v-model="startsAt" :text-input="false" />
+</template>
+```
+
+| Prop | Когда |
+|------|-------|
+| `id` | для `<label for>` |
+| `placeholder` | своя подсказка; иначе `components.timePicker.placeholder` (`чч:мм`) |
+| `textInput` | набор с клавиатуры; по умолчанию включён и принимает только цифры, двоеточие ставится само. `false` оставляет только список |
+| `disabled` | блокировка |
+| `invalid` | красная рамка |
 
 ## Тумблер — ToggleSwitch
 
