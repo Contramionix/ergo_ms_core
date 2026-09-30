@@ -1,5 +1,5 @@
 ---
-description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TabBar, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TabBar, StepRail, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 alwaysApply: false
 ---
 
@@ -24,6 +24,7 @@ alwaysApply: false
 | Несколько фильтров в toolbar | `FilterMenu` | [`filter-menu.mdc`](filter-menu.mdc) |
 | Меню действий (⋯, контекст) | `DropDown` | этот раздел |
 | Вкладки страницы | `TabBar` | этот раздел |
+| Шкала шагов с полосой | `StepRail` | этот раздел |
 | Боковое меню приложения | `MenuList`, миграции `MenuItem` | [`menu.mdc`](menu.mdc) |
 | Загрузка списков без «мигания» | `LoadingContentArea` | [`loading-content-area.mdc`](loading-content-area.mdc) |
 | Быстрая прогрузка страниц | lazy-модалки, prefetch | [`client-perf.mdc`](client-perf.mdc) |
@@ -347,6 +348,33 @@ import TabBar from '@/components/TabBar.vue'
   <button class="nav-tab" :class="{ active: tab === 'a' }">…</button>
 </nav>
 ```
+
+## Шкала шагов — StepRail
+
+Компонент: `@/components/StepRail.vue`.
+
+Горизонтальные шаги и полоса между кружками. Полоса тянется от края кружка до края следующего и занимает долю ширины шага, поэтому растёт и сжимается вместе с контейнером. На узком экране ряд прокручивается, подписи не сжимаются в одну букву.
+
+Шаг: `{ id, label, caption?, marker?, state?, disabled?, link? }`. `state` — `passed` (залитый кружок с галочкой), `current` (обводка акцентом) или `upcoming`. `marker` — текст в кружке, пока шаг не пройден; пустая строка оставляет кружок пустым. `caption` — вторая строка под подписью. `link: 'done'` красит исходящую полосу акцентом; без `link` акцент ставится сам, если шаг `passed`.
+
+```vue
+<script setup>
+import StepRail from '@/components/StepRail.vue'
+</script>
+
+<template>
+  <StepRail :steps="steps" aria-label="Ход" />
+  <StepRail :steps="steps" interactive aria-label="Шаги" @select="onSelect" />
+</template>
+```
+
+| Prop | Когда |
+|------|-------|
+| `steps` | список шагов |
+| `ariaLabel` | подпись группы или навигации |
+| `interactive` | шаги становятся кнопками и шлют `select` с `id` |
+
+**Запрещено:** копировать полосу между кружками в модуле. Цвета только через токены темы.
 
 ## Multi-select выбор пользователей — MemberPickerModal
 
