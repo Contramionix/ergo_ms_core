@@ -67,6 +67,7 @@ const { t } = useAppI18n()
 - Прямой import каталогов модуля в ядро по имени модуля — только glob `locales.js`
 - Класть межмодульные словари в `moduleContracts` ядра
 - JWT / localStorage для секретов; язык в localStorage допустим (не security-sensitive)
+- Переводить сценарии и связный текст фикстур песочницы модуля на `en` / `fr`, пока разработчик прямо не попросил. Эти фразы остаются русской строкой в файле песочницы — [`sandbox-copy.mdc`](sandbox-copy.mdc)
 
 ## API
 
@@ -184,6 +185,7 @@ ergoms i18n-compilemessages
 
 | Тема | Файл |
 |---|---|
+| Текст песочницы модуля | [`sandbox-copy.mdc`](sandbox-copy.mdc) |
 | Клиент Vue | [`client_code.mdc`](client_code.mdc) |
 | Модули, hooks | [`modules.mdc`](modules.mdc) |
 | Модульные задачи IDE | [`module-vscode-tasks.mdc`](module-vscode-tasks.mdc) |
