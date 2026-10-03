@@ -1,5 +1,5 @@
 ---
-description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TabBar, StepRail, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 alwaysApply: false
 ---
 
@@ -23,6 +23,7 @@ alwaysApply: false
 | Настройки: карточка + строки label/hint/контрол | `SettingsCard`, `SettingsCardRow` | этот раздел |
 | Несколько фильтров в toolbar | `FilterMenu` | [`filter-menu.mdc`](filter-menu.mdc) |
 | Меню действий (⋯, контекст) | `DropDown` | этот раздел |
+| Форматированный текст (HTML) | `TextEditor` | этот раздел |
 | Вкладки страницы | `TabBar` | этот раздел |
 | Шкала шагов с полосой | `StepRail` | этот раздел |
 | Боковое меню приложения | `MenuList`, миграции `MenuItem` | [`menu.mdc`](menu.mdc) |
@@ -308,6 +309,29 @@ import { MoreHorizontal, Edit, Trash2 } from '@lucide/vue'
 ```
 
 Эталон: checklist/dropdown в модуле — `modules/<name>/client/components/…` с `DropDown` ядра.
+
+## Текст — TextEditor
+
+Компонент: `@/components/TextEditor.vue`.
+
+Редактор HTML (`contenteditable`): панель форматирования, стиль абзаца, список и дополнительные команды. Это не поле выбора значения из списка (`SelectBox`).
+
+| Prop / событие | Когда |
+|----------------|-------|
+| `content` / `update:content` | основной HTML |
+| `hintText` / `update:hintText` | HTML подсказки |
+
+Подписи панели — ключи `components.textEditor.*`.
+
+```vue
+<script setup>
+import TextEditor from '@/components/TextEditor.vue'
+</script>
+
+<template>
+  <TextEditor :content="html" @update:content="html = $event" />
+</template>
+```
 
 ## Вкладки — TabBar
 
