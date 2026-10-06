@@ -38,6 +38,7 @@ from db_backup_common import (  # noqa: E402
     write_manifest,
 )
 from deployment_env import get_ergo_db, read_env  # noqa: E402
+from media_backup import archive_media, restore_media  # noqa: E402
 
 
 def _log(level: str, message: str) -> None:
@@ -89,15 +90,30 @@ def run_backup(root: Path, *, only_alias: str | None) -> int:
         size_mb = dest.stat().st_size / (1024 * 1024) if dest.is_file() else 0.0
         _log('ok', t('db_backup_section_ready', alias=section['alias'], size_mb=f'{size_mb:.1f}'))
         ok_sections.append(section)
-    write_manifest(
-        snapshot,
-        build_manifest(
-            created_at=created,
-            ergo_db=ergo_db,
-            ergo_runtime=runtime,
-            sections=ok_sections,
-        ),
+    manifest = build_manifest(
+        created_at=created,
+        ergo_db=ergo_db,
+        ergo_runtime=runtime,
+        sections=ok_sections,
     )
+    try:
+        media_info = archive_media(root, snapshot)
+    except BackupError as exc:
+        _log('error', str(exc))
+        return 1
+    manifest['media'] = media_info
+    if media_info.get('present'):
+        _log(
+            'ok',
+            t(
+                'db_backup_media_ready',
+                count=media_info['file_count'],
+                size_mb=f"{media_info['bytes'] / (1024 * 1024):.1f}",
+            ),
+        )
+    else:
+        _log('skip', t('db_backup_media_absent'))
+    write_manifest(snapshot, manifest)
     _log('ok', t('db_backup_done', path=str(snapshot)))
     keep = backup_keep_limit()
     removed = prune_old_snapshots(root, keep)
@@ -178,6 +194,14 @@ def run_restore(
             _log('error', str(exc))
             return 1
         _log('ok', t('db_restore_section_ready', alias=alias))
+    media_info = manifest.get('media') if isinstance(manifest.get('media'), dict) else None
+    try:
+        restore_media(root, snapshot, media_info)
+    except BackupError as exc:
+        _log('error', str(exc))
+        return 1
+    if media_info and media_info.get('present'):
+        _log('ok', t('db_restore_media_ready', count=media_info.get('file_count') or 0))
     _log('ok', t('db_restore_done', path=str(snapshot)))
     return 0
 
