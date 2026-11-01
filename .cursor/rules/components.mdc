@@ -1,5 +1,5 @@
 ---
-description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, ImageHoverFrame, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 alwaysApply: false
 ---
 
@@ -35,6 +35,7 @@ alwaysApply: false
 | Модальные окна | `ModalCenter`, `confirm.js` | [`modal-center.mdc`](modal-center.mdc) |
 | Multi-select выбор пользователей | `MemberPickerModal` | [`member-picker.mdc`](member-picker.mdc) |
 | Аватар пользователя | `UserAvatar` | [`user-avatar.mdc`](user-avatar.mdc) |
+| Поставить, заменить или удалить обложку, аватар и другую картинку | `ImageHoverFrame` | [`image-hover-frame.mdc`](image-hover-frame.mdc) |
 | Атлас / граф на холсте | `GraphAtlas` | [`graph-atlas.mdc`](graph-atlas.mdc) |
 | Контентное изображение (режим без картинок) | `ContentImage` | [`client-a11y.mdc`](client-a11y.mdc) |
 | Предпросмотр фото (галерея, зум) | `ImageLightbox` | [`image-lightbox.mdc`](image-lightbox.mdc) |

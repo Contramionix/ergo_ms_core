@@ -40,3 +40,5 @@ alwaysApply: false
 Если сериализатор API ещё не отдаёт `public_id` — добавь поле тем же паттерном, что в [`security-details.mdc`](security-details.mdc), а не обходи через pk в prop аватара.
 
 Типичные размеры: 32 (списки), 40 (меню), 120 (профиль).
+
+Смену и удаление фото — затемнение и кнопки — делай через [`ImageHoverFrame`](image-hover-frame.mdc). `UserAvatar` остаётся картинкой в слоте.
