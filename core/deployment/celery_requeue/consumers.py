@@ -27,9 +27,11 @@ def scan_local_workers() -> LocalConsumers:
     queues: set[str] = set()
     uncertain = False
     saw_worker = False
-    for proc in psutil.process_iter(['cmdline']):
+    # cmdline читаем в теле цикла: process_iter(attrs=['cmdline']) роняет обход
+    # на WinError 87 ещё до yield.
+    for proc in psutil.process_iter():
         try:
-            argv = [str(part) for part in (proc.info.get('cmdline') or [])]
+            argv = [str(part) for part in (proc.cmdline() or [])]
         except (psutil.Error, OSError):
             continue
         classified = classify_worker_argv(argv)

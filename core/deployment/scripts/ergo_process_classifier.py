@@ -267,7 +267,7 @@ def _read_cmdline(proc: psutil.Process, cached: list[str] | None) -> list[str]:
         return cached
     try:
         return proc.cmdline() or []
-    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
         return []
 
 
@@ -308,15 +308,14 @@ def _resolve_process_roles(project_root: Path) -> dict[int, str]:
     rules = _module_roles(project_root)
     candidates = _candidate_process_names(project_root)
 
-    for proc in psutil.process_iter(['pid', 'ppid', 'name']):
+    for proc in psutil.process_iter():
         try:
-            info = proc.info
-            pid = int(info['pid'])
-            ppid = int(info.get('ppid') or 0)
-            name = str(info.get('name') or '')
+            pid = int(proc.pid)
+            ppid = int(proc.ppid() or 0)
+            name = str(proc.name() or '')
             entries.append((pid, ppid, name))
             parents[pid] = ppid
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
             continue
 
     for pid, _ppid, name in entries:
@@ -324,7 +323,7 @@ def _resolve_process_roles(project_root: Path) -> dict[int, str]:
             continue
         try:
             cmdline = psutil.Process(pid).cmdline() or []
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
             continue
         cmdlines[pid] = cmdline
         role = _classify_by_cmdline(cmdline, project_root, rules)
@@ -339,7 +338,7 @@ def _resolve_process_roles(project_root: Path) -> dict[int, str]:
             continue
         try:
             cwd_text = _process_cwd_text(psutil.Process(pid))
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
             cwd_text = None
 
         if _needs_cwd_classify(cmdline):
