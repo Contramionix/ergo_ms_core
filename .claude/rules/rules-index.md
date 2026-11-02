@@ -8,7 +8,7 @@ Cursor подключает эти правила по описанию, Claude 
 - [`.cursor/rules/celery-balance.mdc`](../../.cursor/rules/celery-balance.mdc) — Балансировщик Celery — task_footprint.yaml, бюджет хоста, celery-balance, overlay
 - [`.cursor/rules/celery.mdc`](../../.cursor/rules/celery.mdc) — Celery — ergoms start-worker/beat, задачи в modules/, celery_config, логи
 - [`.cursor/rules/client-perf.mdc`](../../.cursor/rules/client-perf.mdc) — Производительность клиента Vue — lazy-чанки, async-модалки, параллельные API, prefetch меню
-- [`.cursor/rules/components.mdc`](../../.cursor/rules/components.mdc) — Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+- [`.cursor/rules/components.mdc`](../../.cursor/rules/components.mdc) — Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, ImageHoverFrame, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 - [`.cursor/rules/cursor-browser.mdc`](../../.cursor/rules/cursor-browser.mdc) — Встроенный браузер Cursor, cursor-ide-browser, вход через #login из env/mcp.env, без пароля в чате
 - [`.cursor/rules/data-table.mdc`](../../.cursor/rules/data-table.mdc) — UI ядра — DataTable, раскрывающаяся подстрока и пагинация через enable-pagination
 - [`.cursor/rules/database.mdc`](../../.cursor/rules/database.mdc) — База данных — миграции Django, ORM, SqlAlchemyManager, DBConfig, ergoms
@@ -27,6 +27,7 @@ Cursor подключает эти правила по описанию, Claude 
 - [`.cursor/rules/form-card.mdc`](../../.cursor/rules/form-card.mdc) — UI ядра — Формы — FormCard / FormField
 - [`.cursor/rules/graph-atlas.mdc`](../../.cursor/rules/graph-atlas.mdc) — UI ядра — Атлас — GraphAtlas
 - [`.cursor/rules/host-lifecycle.mdc`](../../.cursor/rules/host-lifecycle.mdc) — host_lifecycle.yaml — install/uninstall/stop модульных демонов в install-services и тестах без хардкода имён модулей
+- [`.cursor/rules/image-hover-frame.mdc`](../../.cursor/rules/image-hover-frame.mdc) — UI ядра — поставить, заменить или удалить обложку, аватар и другую картинку — ImageHoverFrame
 - [`.cursor/rules/image-lightbox.mdc`](../../.cursor/rules/image-lightbox.mdc) — UI ядра — ImageLightbox, предпросмотр фото, галерея и зум
 - [`.cursor/rules/lane-graph.mdc`](../../.cursor/rules/lane-graph.mdc) — UI ядра — Схема по колонкам — LaneGraph
 - [`.cursor/rules/link-board.mdc`](../../.cursor/rules/link-board.mdc) — UI ядра — Схема связей — LinkBoard
