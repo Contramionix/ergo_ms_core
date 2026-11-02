@@ -30,6 +30,7 @@ paths:
 | [`env/search.env.example`](../../env/search.env.example) | Meilisearch / BM25 (`MEILI_*`); режим `ERGO_SEARCH_ENABLED` — в корне |
 | [`env/modules.env.example`](../../env/modules.env.example) | microservice / ModuleBridge (`MICROSERVICE_MODULES`, `BRIDGE_*`, `HOST_SERVICES`, `MODULE_PROCESS_PROFILE`) |
 | [`databases.yaml.example`](../../databases.yaml.example) | SQL + секция `redis` |
+| [`media_zones.yaml.example`](../../media_zones.yaml.example) | пример зон media; рабочий `media_zones.yaml` только на машине, как `databases.yaml` |
 | [`celery_workers.yaml.example`](../../celery_workers.yaml.example) | процессы Celery worker |
 
 - Загрузка: `.env` → `env/*.env` → `modules/**/.env` (модули перекрывают).

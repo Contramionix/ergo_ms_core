@@ -1,0 +1,19 @@
+# Пример зон media. Рабочий файл — media_zones.yaml в корне, он не коммитится.
+# Префикс — начало относительного пути. Самый длинный префикс побеждает.
+#
+# remote — другой media_api. Весь префикс, включая новые файлы, пишется туда.
+# Пока копия ещё не доехала, чтение старого файла берёт местный диск.
+# Пустой base_url выключает зону.
+#
+# local — каталог на другом диске этой машины. root абсолютный.
+# На сервере, который только принимает файлы, чужой base_url не задают.
+
+zones:
+  - prefix: <name>/pages
+    mode: remote
+    base_url: ${MEDIA_ZONE_ARCHIVE_URL}
+    # key_env: MEDIA_API_INTERNAL_KEY
+
+  - prefix: <name>/archive
+    mode: local
+    root: /path/to/disk/media

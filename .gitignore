@@ -2,6 +2,10 @@ databases.yaml
 
 celery_workers.yaml
 
+# Сценарий зон media — только на машине. В git лежит пример.
+media_zones.yaml
+!media_zones.yaml.example
+
 .env
 .venv
 
