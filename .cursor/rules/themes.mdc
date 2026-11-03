@@ -221,6 +221,10 @@ const { isDark } = useModuleThemeMode('<name>')
   font-family: var(--font-family-base);
 }
 
+.my-block--inter {
+  font-family: var(--font-family-inter);
+}
+
 code, pre {
   font-family: var(--font-family-mono);
 }
@@ -230,8 +234,9 @@ code, pre {
 
 - `--font-family-base` — системный stack (Segoe UI, Roboto, …)
 - `--font-family-mono` — monospace stack
+- `--font-family-inter` — локальный Inter (вариативный, SIL OFL), подключать явно
 
-Модули **не** объявляют свой `@font-face` и **не** копируют font-family из Google Fonts (`Inter`, `Geologica` и т.п.) — только `var(--font-family-base)` / `var(--font-family-mono)` или `inherit`.
+Модули **не** объявляют свой `@font-face` и **не** копируют font-family из Google Fonts (`Geologica` и т.п.). Допустимы `var(--font-family-base)`, `var(--font-family-mono)`, `var(--font-family-inter)` или `inherit`. Сырое имя `Inter` в модулях не писать — только токен.
 
 **Локальное размещение шрифтов** (если понадобится не-system шрифт):
 
