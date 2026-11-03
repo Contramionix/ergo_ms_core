@@ -31,7 +31,7 @@ alwaysApply: false
 | `menu.can_see_item` | event | Видимость пункта | модуль |
 | `core.user_delete` | event | Очистка при удалении user | подписчик в модуле |
 | `core.bulk_user_create` | event | Массовое создание users | подписчик в модуле |
-| `core.person.ensure_for_user` | op | Карточка человека учётки (`user_public_id`), создаёт при отсутствии. Ответ — payload `{public_id, user_public_id, linked, last_name, first_name, middle_name, full_name, birth_date}` или None | ядро ([`person.mdc`](person.mdc)) |
+| `core.person.ensure_for_user` | op | Карточка человека учётки (`user_public_id`), создаёт при отсутствии. Ответ — payload `{public_id, user_public_id, linked, last_name, first_name, middle_name, full_name, birth_date, gender, avatar_url}` или None. `avatar_url` пуст, пока карточка привязана к учётке | ядро ([`person.mdc`](person.mdc)) |
 | `core.person.get` / `core.person.resolve_many` | op | Payload по `person_public_id` / `{ref: payload}` по `person_public_ids`. Ссылка на слитую карточку ведёт к выжившей | ядро |
 | `core.person.find_by_users` | op | `{user_public_id: payload}` по `user_public_ids` без создания карточек | ядро |
 | `core.person.create_unlinked` | op | Карточка без учётки (`last_name`/`first_name`/`middle_name` или `person_name`, `birth_date`). Ответ `{status, person}` или `{status: 'error', error}` | ядро |
@@ -40,6 +40,7 @@ alwaysApply: false
 | `core.person.link` / `core.person.unlink` | op | Явная привязка учётки и отвязка, только глобальный админ. При расхождении ФИО или даты ответ `{status: 'conflict', conflicts}`, повтор с `names_from` / `birth_date_from` = `person` или `account` | ядро |
 | `core.person.merge` | op | Слияние двух карточек (`survivor_public_id`, `loser_public_id`), только глобальный админ. Обе с учёткой — отказ | ядро |
 | `core.person.resolve_alias` / `core.person.can_edit` | op | Выжившая карточка по старому `public_id`; право `user_public_id` править карточку | ядро |
+| `core.person.set_portrait` / `core.person.clear_portrait` | op | Портрет карточки без учётки. `file_path` уже лежит в `avatars/persons/<person_public_id>/` (JPEG, PNG, WebP, GIF). Только глобальный администратор. У привязанной карточки отказ `person_linked`. Ответ `{status, person}` | ядро |
 | `core.person.edit_policy` | group | `callable(*, user_public_id, person_public_id) -> True / False / None`: модуль расширяет круг тех, кто правит карточку без учётки | модуль с кадровым редактором |
 | `core.person_merged` / `core.person_linked` / `core.person_unlinked` | event | Слияние (`survivor_public_id`, `loser_public_id`), привязка и отвязка (`person_public_id`, `user_public_id`). Модуль перевешивает свои ссылки | подписчик в модуле |
 | `core.compose_registration_invitation` | op | Необязательная подмена письма-приглашения на регистрацию: `{subject, body, html_body?, from_display_name?}`. Нет провайдера, `None` или неполный dict — текст ядра. Получателя и адрес From модуль не задаёт, только необязательное отображаемое имя | не более одного модуля |
