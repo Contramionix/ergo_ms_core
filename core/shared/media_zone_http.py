@@ -9,7 +9,8 @@ from urllib.parse import quote
 import requests
 
 _TIMEOUT = (10, 120)
-_WRITE_TIMEOUT = (10, 600)
+# Крупный файл ядро принимает целиком и отвечает только в конце.
+_WRITE_TIMEOUT = (30, 3600)
 _CHUNK = 1024 * 1024
 
 
