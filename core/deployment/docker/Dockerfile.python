@@ -122,7 +122,6 @@ RUN apt-get update \
     && curl -fsSL "https://download.docker.com/linux/static/stable/${docker_arch}/docker-27.5.1.tgz" \
         | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
     && rm -rf /var/lib/apt/lists/*
-COPY core/deployment ./core/deployment
 ENV CELERY_CLUSTER=on \
     CELERY_CLUSTER_ROLE=agent
 # Ядро ставится из poetry.lock. Эти пакеты живут только в pyproject модулей,
@@ -164,6 +163,18 @@ RUN poetry run pip install --no-cache-dir \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libcairo2 \
     && rm -rf /var/lib/apt/lists/*
+# Эмбеддинги фактов и OCR сканов. Torch под CPU: видеокарту узла держит сервис Ollama.
+RUN poetry run pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        'torch==2.11.0+cpu' \
+        'transformers>=4.53.2' \
+        'sentence-transformers>=3.0.0' \
+        'sentencepiece>=0.2.0' \
+        'pytesseract>=0.3.13,<0.4'
+# Веса Hugging Face скачиваются один раз в том кэша, а не в слой контейнера.
+ENV HF_HOME=/app/virtual_env/cache/huggingface
+# Последним слоем: правка развёртывания не переустанавливает пакеты выше.
+COPY core/deployment ./core/deployment
 CMD ["python", "core/api/scripts/start_celery_worker.py"]
 
 # Последняя стадия — прежний образ Compose. Сборка без --target её и берёт.

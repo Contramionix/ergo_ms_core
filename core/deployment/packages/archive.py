@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import hashlib
 from http.client import HTTPException
@@ -199,6 +200,26 @@ def download_tool_asset(root, name, url, destination, *, refresh=False, archive_
     return download_verified(url, destination, mirrors=mirrors, sha256=hashes.get(filename), archive_type=archive_type, refresh=refresh, min_bytes=min_bytes, downloader=downloader)
 
 
+def _move_into(staged: Path, dest: Path) -> None:
+    """Кэш и packages бывают разными точками монтирования (тома воркера Swarm).
+
+    Тогда rename даёт EXDEV даже на одном диске: копируем рядом с dest и подменяем там.
+    """
+    try:
+        os.replace(staged, dest)
+        return
+    except OSError as exc:
+        if exc.errno != errno.EXDEV:
+            raise
+    local = dest.with_name(dest.name + '.staging-' + uuid4().hex)
+    try:
+        shutil.copytree(staged, local, symlinks=True)
+        os.replace(local, dest)
+    except OSError:
+        shutil.rmtree(local, ignore_errors=True)
+        raise
+
+
 def publish_package(root: Path, staged: Path, dest: Path):
     """Commit a validated payload; restore the previous installation on error."""
     base = package_dir(root, '').resolve()
@@ -211,7 +232,7 @@ def publish_package(root: Path, staged: Path, dest: Path):
         if dest.exists():
             os.replace(dest, backup)
             moved = True
-        os.replace(staged, dest)
+        _move_into(staged, dest)
     except OSError as exc:
         if moved:
             os.replace(backup, dest)

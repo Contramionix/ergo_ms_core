@@ -96,6 +96,7 @@ packages:
     version: "5.5.3"
     installer: packages/installers/tesseract.py
     supports_refresh: true
+    swarm_worker: true
     supported_platforms: [windows, linux]
     marker_windows: tesseract.exe
     marker_linux: bin/tesseract
