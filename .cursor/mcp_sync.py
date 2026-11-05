@@ -24,6 +24,8 @@ from typing import Any
 
 import yaml
 
+from os_abstraction import get_npx_executable
+
 # Windows: stdout часто cp1252 — русские description в JSON ломают list --json
 # (расширение module-mcp тогда получает пустой каталог).
 for _stream in (sys.stdout, sys.stderr):
@@ -39,6 +41,18 @@ MCP_JSON_PATH = _CURSOR_DIR / 'mcp.json'
 DATABASES_YAML = PROJECT_ROOT / 'databases.yaml'
 MODULES_DIR = PROJECT_ROOT / 'modules'
 LAUNCHER = '.cursor/mcp_launcher.js'
+
+
+def _npx_command() -> str:
+    """Путь к npx для Cursor: portable Node, путь относительно корня проекта."""
+    found = get_npx_executable()
+    if not found:
+        return 'npx'
+    path = Path(found).resolve()
+    try:
+        return path.relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _section_to_kebab(section: str) -> str:
@@ -208,14 +222,15 @@ def _registry_to_entries(item: dict[str, Any]) -> list[McpServerEntry]:
         if not package:
             raise SystemExit(f'[ERROR] Сервер {name}: для type=npx нужен package')
         args = ['-y', package] + list(item.get('args') or [])
+        npx_command = _npx_command()
         return [
             McpServerEntry(
                 name=name,
                 description=description,
                 source='core',
-                script=f'npx {package}',
+                script=f'{npx_command} {package}',
                 config={
-                    'command': 'npx',
+                    'command': npx_command,
                     'args': args,
                 },
             )
