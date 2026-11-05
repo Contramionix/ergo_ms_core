@@ -45,6 +45,7 @@ alwaysApply: false
 | Мониторинг источников (запуск/стоп, график) | `SourceRunActions`, `LiveRateChart`, `useSourceMonitor` | [`source-monitor.mdc`](source-monitor.mdc) |
 | Skip-link / landmarks | `SkipLink`, `<main id="main-content">` | [`client-a11y.mdc`](client-a11y.mdc) |
 | Динамические Lucide-иконки | `LucideIcon` (имя PascalCase) | [`icons.mdc`](icons.mdc) |
+| Анимированные Lucide-иконки | `LucideMotionIcon` (то же имя) | [`icons.mdc`](icons.mdc) |
 
 Режимы анимаций, картинок и помощи диктору — [`client-a11y.mdc`](client-a11y.mdc) (`useUiModes`, `data-ergo-*`).
 
