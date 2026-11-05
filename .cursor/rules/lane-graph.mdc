@@ -28,7 +28,7 @@ const LaneGraph = defineAsyncComponent(() => import('@/components/LaneGraph.vue'
 
 | Prop | Когда |
 |------|-------|
-| `items` | `{ id, title, lane, row?, category, weight, badge, optional, dependsOn[], highlight }` — `id` непрозрачный, не pk БД |
+| `items` | `{ id, title, lane, row?, category, weight, badge, optional, filled?, dependsOn[], highlight }` — `id` непрозрачный, не pk БД. `dependsOn` — id или `{ id, tone?, dashed?, sibling? }`: цвет и пунктир стрелки, `sibling` — связь внутри одной колонки (скоба справа, не ошибка порядка). `filled` — карточка залита цветом категории |
 | `lanes` | `{ id, title, weightLimit? }` — индекс колонки 0-based; без `weightLimit` полоса без «перегруза» |
 | `categories` | `{ id, label, tone }` — `tone`: `accent` / `info` / `success` / `warning` / `neutral` |
 | `weightUnit` | подпись единиц нагрузки |
@@ -38,7 +38,9 @@ const LaneGraph = defineAsyncComponent(() => import('@/components/LaneGraph.vue'
 | `showEdges` | `false` — без SVG-стрелок |
 | `showDetail` | `false` — без текста под схемой |
 | `showWarnings` | `false` — без предупреждений под схемой |
+| `uniformCards` | все карточки одной высоты, заголовок обрезается на третьей строке |
+| `focusChain` | `full` (по умолчанию) — при наведении вся цепочка; `direct` — только соседи карточки |
 
-Слоты `#item`, `#detail`, `#legend`. События `hover`, `select`. Режимы критического пути и блокирующих скрываются, если рёбер нет или `showModes` выключен. Карточки — поверхность системы и обычный текст, цвет категории только на левой кромке. Цвета только `--ui-*`, координаты — `v-csp-style`.
+Слоты `#item`, `#detail`, `#legend`. События `hover`, `select`. Режимы критического пути и блокирующих скрываются, если рёбер нет или `showModes` выключен. Карточки — поверхность системы и обычный текст, цвет категории на левой кромке; заливка только у `filled`. Стили — `LaneGraph.scss` рядом с компонентом. Цвета только `--ui-*`, координаты — `v-csp-style`.
 
 **Запрещено:** имена вроде «учебный план» в ядре; vue-flow/d3 в этом компоненте; прямые вызовы API модулей из `LaneGraph`.
