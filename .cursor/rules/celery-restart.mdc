@@ -1,0 +1,69 @@
+---
+description: Задача модуля после перезапуска воркера или ergoms — task_restart.yaml, hold / drop / requeue, ergoms celery-parked --resume
+globs:
+  - "modules/*/task_restart.yaml"
+  - core/api/src/core/utils/celery/restart_*.py
+alwaysApply: false
+---
+
+# Задачи после перезапуска воркера
+
+## Кратко
+
+- Задачу модуля, которую оборвал перезапуск воркера или `ergoms`, воркер сам заново не выполняет. Задачи, которые ещё не начинались, идут как обычно.
+- Что с ней делать, задаёт hook-файл `modules/<name>/task_restart.yaml`. Без файла действует `CELERY_RESTART_POLICY` (по умолчанию `hold`).
+- `hold` — задача отложена и ждёт `ergoms celery-parked --resume <id>`. `drop` — не запускается и не хранится. `requeue` — выполняется заново сразу.
+- При `--resume` задача уходит в ту же очередь с теми же аргументами и `resume=True`, если её функция принимает этот параметр. Чекпоинт хранит сама задача — см. [`long-running-jobs.mdc`](long-running-jobs.mdc).
+- Задачи ядра (не `modules.<name>.*`) по-прежнему выполняются заново. Выключить всё — `CELERY_RESTART_HOLD=off` в `env/celery.env`.
+
+## Как это работает
+
+Перед стартом обёртка ([`restart_hold.py`](../../core/api/src/core/utils/celery/restart_hold.py)) ставит метку с номером жизни воркера. Успех, ошибка и `retry` метку снимают. Если сообщение пришло снова, а метка осталась от прошлой жизни воркера, задачу оборвали посреди работы. Метки и отложенные задачи лежат в Redis брокера, их видят все узлы кластера. При брокере в БД или SQLite — в `virtual_env/cache/celery_restart/`.
+
+Ожидание слота ограничителя параллелизма стартом не считается: обёртка стоит внутри ограничителя.
+
+## Формат `task_restart.yaml`
+
+```yaml
+default: hold            # для задач модуля без своего правила
+resume_kwarg: resume     # имя флага продолжения; null — не передавать
+tasks:                   # первое совпавшее правило сверху вниз, шаблон fnmatch
+  - pattern: "modules.<name>.api.monitor.tasks.*"
+    on_restart: drop
+  - pattern: "modules.<name>.api.foo.tasks.long_job"
+    resume_kwarg: from_checkpoint
+```
+
+## Обязательно
+
+- Периодическим задачам Beat (снимки, сторожа, ежедневные синхронизации) ставь `drop`, иначе после каждого перезапуска копятся отложенные копии.
+- Долгой задаче давай параметр `resume` и пропускай сделанное по чекпоинту. Тогда `--resume` продолжит с места остановки.
+- Если модуль сам поднимает потерянную работу (сторож цепочек, `restore_*` в Beat), спроси ядро: `auto_restore_allowed(task_name)` из `src.core.utils.celery.restart_hold`. `False` — не поднимай, человек запустит сам.
+
+## Запрещено
+
+```python
+# BAD — свой автоперезапуск в обход политики модуля
+@worker_ready.connect
+def _restart_lost(**_):
+    long_job.delay()
+
+# GOOD
+if auto_restore_allowed('modules.<name>.api.foo.tasks.long_job'):
+    long_job.delay()
+```
+
+## Команды
+
+```bash
+ergoms celery-parked                       # список отложенных
+ergoms celery-parked --resume <id>         # продолжить одну
+ergoms celery-parked --resume --all --module=<name>
+ergoms celery-parked --drop <id>           # удалить без запуска
+```
+
+| Тема | Файл |
+|------|------|
+| Celery, воркеры | [`celery.mdc`](celery.mdc) |
+| Чекпоинт и `--resume` | [`long-running-jobs.mdc`](long-running-jobs.mdc) |
+| Hook-файлы модулей | [`modules.mdc`](modules.mdc) |

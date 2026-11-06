@@ -24,6 +24,7 @@ paths:
   - "modules/*/model_providers.yaml"
   - "modules/*/vscode.tasks.yaml"
   - "modules/*/task_footprint.yaml"
+  - "modules/*/task_restart.yaml"
 ---
 <!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
 
@@ -68,6 +69,7 @@ modules/<имя>/
 ├── process_roles.yaml       # роли процессов для ergoms resource-usage (если есть свой демон)
 ├── celery_workers.yaml      # именованные воркеры модуля: id, очереди, hostname (если видов несколько)
 ├── task_footprint.yaml      # footprint задач для ergoms celery-balance (если есть Celery)
+├── task_restart.yaml       # что делать с задачей после перезапуска воркера: hold / drop / requeue
 ├── host_lifecycle.yaml      # install/uninstall/stop демона в install-services и тестах (если есть служба/процесс)
 ├── packages.yaml            # portable-пакеты в virtual_env/packages (если модуль ставит бинарники)
 ├── huggingface_models.yaml  # снимки Hugging Face в virtual_env/trained_models/huggingface/
@@ -97,6 +99,7 @@ modules/<имя>/
 | Меню CMS | миграции меню + `menu.catalog` | [`restore_menu.py`](../../core/api/src/core/cms/management/commands/restore_menu.py) |
 | resource-usage | `process_roles.yaml` | [`process-roles.mdc`](../../.cursor/rules/process-roles.mdc) |
 | Celery balance | `task_footprint.yaml` | [`celery-balance.mdc`](../../.cursor/rules/celery-balance.mdc) |
+| Задачи после перезапуска | `task_restart.yaml` | [`celery-restart.mdc`](../../.cursor/rules/celery-restart.mdc) |
 | OS-службы | `host_lifecycle.yaml` | [`host-lifecycle.mdc`](../../.cursor/rules/host-lifecycle.mdc) |
 | Portable-пакеты | `packages.yaml` | [`packages.mdc`](../../.cursor/rules/packages.mdc) |
 | Снимки Hugging Face | `huggingface_models.yaml` | [`huggingface-models.mdc`](../../.cursor/rules/huggingface-models.mdc) |

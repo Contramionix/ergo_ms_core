@@ -117,6 +117,9 @@ sections:
   - name: celery-requeue
     invoke: ergoms celery-requeue
     summary: Вернуть в очередь задачи Celery, чей воркер уже не держит их
+  - name: celery-parked
+    invoke: ergoms celery-parked [--resume <id>… | --drop <id>…] [--all] [--module=<name>] [--json]
+    summary: "Задачи модулей, отложенные после перезапуска воркера: список, --resume, --drop (task_restart.yaml)"
   - name: loadtest
     invoke: ergoms loadtest [--profile …] [--isolated-db|--docker-isolated] | --find-limit … | --cleanup-users
     summary: Нагрузочный прогон API/pages (Locust), find-limit, изоляция БД или удаление lt_*

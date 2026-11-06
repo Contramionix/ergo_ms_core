@@ -45,6 +45,16 @@ ergoms celery-balance --dry-run
 
 В `celery_workers.yaml` у воркера с `pool: prefork` можно задать `max_tasks_per_child` и `max_memory_per_child` (килобайты). `ergoms start-worker` передаёт их Celery, и процесс перезапускается, когда наберёт столько задач или памяти. Для пула `threads` эти ключи не действуют.
 
+Если задачу модуля оборвал перезапуск воркера или `ergoms`, она сама не начинается заново, а ждёт решения. Что делать с ней, модуль задаёт в `modules/<name>/task_restart.yaml`: отложить (`hold`, по умолчанию), выбросить (`drop`, для периодических задач) или выполнить сразу (`requeue`). Отложенные задачи:
+
+```cmd
+ergoms celery-parked
+ergoms celery-parked --resume <id>
+ergoms celery-parked --drop <id>
+```
+
+При `--resume` задача уходит в ту же очередь с `resume=True`, если её функция принимает этот параметр, и продолжает с чекпоинта. Вернуть прежний автоперезапуск для всех задач — `CELERY_RESTART_HOLD=off` в `env/celery.env`.
+
 Полный набор для разработки (API, клиент, Media API, worker, beat; Redis, Meilisearch и JupyterLab — если включены в `.env`) одной командой:
 
 ```cmd

@@ -34,6 +34,7 @@ Worker и Beat должны смотреть на **один** брокер. И�
 - `max_tasks_per_child` и `max_memory_per_child` в `celery_workers.yaml` (корень или модуль) попадают в команду worker только при `pool: prefork`. `max_memory_per_child` — килобайты, как у Celery. При `threads` ключи не передаются: потоки не перезапускают процесс.
 - `modules/<имя>/task_footprint.yaml` — ожидаемый footprint задач для `ergoms celery-balance` (опционально). При включённом кластере процессорные очереди `medium` и `heavy` уходят на рабочие узлы сами; файл нужен, чтобы оставить очередь на основном сервере (`placement: primary`) или задать память и потолок.
 - `modules/<имя>/api/celery_beat_config.py` — расписание (если нужно)
+- `modules/<имя>/task_restart.yaml` — что делать с задачей, которую оборвал перезапуск воркера или `ergoms`: `hold` (ждать `ergoms celery-parked --resume`), `drop`, `requeue`. Без файла — `hold`. Подробно — [`celery-restart.mdc`](celery-restart.mdc)
 
 Пример маршрута:
 
@@ -73,6 +74,7 @@ ergoms logs celery-beat notifications 200
 | Балансировщик concurrency | [`celery-balance.mdc`](celery-balance.mdc) |
 | Вынос модуля в сервис | [`modularization.mdc`](modularization.mdc) |
 | Долгий расчёт, пауза, --resume | [`long-running-jobs.mdc`](long-running-jobs.mdc) |
+| Задачи после перезапуска | [`celery-restart.mdc`](celery-restart.mdc) |
 
 ## Не делай
 

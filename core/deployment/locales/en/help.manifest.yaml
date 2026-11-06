@@ -111,6 +111,9 @@ sections:
   - name: celery-requeue
     invoke: ergoms celery-requeue
     summary: Return Celery tasks to the queue when their worker no longer holds them
+  - name: celery-parked
+    invoke: ergoms celery-parked [--resume <id>… | --drop <id>…] [--all] [--module=<name>] [--json]
+    summary: "Module tasks parked after a worker restart: list, --resume, --drop (task_restart.yaml)"
   - name: loadtest
     invoke: ergoms loadtest [--profile …] [--isolated-db|--docker-isolated] | --find-limit … | --cleanup-users
     summary: API/pages load test (Locust), find-limit, DB isolation, or delete lt_* users
