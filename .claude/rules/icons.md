@@ -1,7 +1,10 @@
 ---
 paths:
   - "core/client/src/components/LucideIcon.vue"
+  - "core/client/src/components/LucideMotionIcon.vue"
   - "core/client/src/js/lucideIconLoader.js"
+  - "core/client/src/js/lucideMotionIconLoader.js"
+  - "core/client/src/js/lucideMotionIconGlob.js"
   - "core/client/src/config/icons-mapping.js"
   - "core/client/src/modules/icons/**"
   - "core/client/src/integrations/appsMenu.js"
@@ -25,6 +28,7 @@ paths:
 - Рендер в шаблоне — **`LucideIcon`** (`@/components/LucideIcon.vue`); обводка — `LUCIDE_STROKE_WIDTH` (не задавай свой `stroke-width` без причины)
 - SVG Lucide — квадрат: не ставь глобально `svg.lucide { display: block }` без фиксированной ширины. `display: block` растягивает глиф на 100% родителя (плоский колокол в пустом inbox, сплющенные иконки меню). Эталон: `inline-block` + `vertical-align: middle` + `aspect-ratio: 1` в `_globals.scss`; хост `LucideIcon` задаёт размер через `data-icon-size` и CSS, не через `:style` (CSP `style-src 'self'`).
 - Загрузка / preload — `lucideIconLoader.js` / `IconManager` (`normalizeLucideIconName`, `getLucideIconAsync`, `preloadLucideIconNames`)
+- Анимированный глиф по тому же имени — `lucideMotionIconLoader.js` / `LucideMotionIcon`. Меню и декларации остаются на `LucideIcon`. Barrel `@respeak/lucide-motion-vue` не импортировать
 - Миграции меню API — `icon='LayoutGrid'` (строка); клиент не превращает имя в Vue-компонент до рендера
 - Bridge (`apps.menu.items`, `header.userMenu.items`) — поле `icon: 'Bot'`, не `markRaw(Bot)`
 - Статический «хром» в том же файле (ChevronDown, X, GripVertical) — прямой `import` из `@lucide/vue` допустим
@@ -39,6 +43,8 @@ paths:
 | Иконка из модуля (bridge) | `icon: 'Building2'` — без import lucide в модуле |
 | Иконка уведомления / audit | строка в данных; UI ядра рендерит через `LucideIcon` |
 | Preload набора имён | `preloadLucideIconNames(['Home', 'Settings'])` |
+| Анимированная иконка по имени | `<LucideMotionIcon name="Heart" animate-on-hover />` или `getLucideMotionIconAsync('Heart')` |
+| Preload анимированных имён | `preloadLucideMotionIconNames(['Heart', 'Settings'])` |
 | Нестандартный ввод (`user-round`, `lucide:Bell`) | ядро нормализует через `normalizeLucideIconName` |
 
 ## Запрещено
@@ -61,6 +67,9 @@ import { icons } from './my-icon-map.js'
 
 // BAD — namespace import тянет все глифы (~1800 HTTP-запросов)
 import * as Lucide from '@lucide/vue'
+
+// BAD — barrel анимированных иконок
+import { Heart } from '@respeak/lucide-motion-vue'
 ```
 
 ```js
@@ -113,8 +122,10 @@ bridge.provideMany(HEADER_USER_MENU_ITEMS_GROUP, '<name>', {
 | Тема | Путь |
 |---|---|
 | Рендер | [`LucideIcon.vue`](../../core/client/src/components/LucideIcon.vue) |
+| Анимированный рендер | [`LucideMotionIcon.vue`](../../core/client/src/components/LucideMotionIcon.vue) |
 | Семантические имена ядра | [`coreIconNames.js`](../../core/client/src/config/coreIconNames.js) |
 | Loader + normalize | [`lucideIconLoader.js`](../../core/client/src/js/lucideIconLoader.js) |
+| Анимированный loader | [`lucideMotionIconLoader.js`](../../core/client/src/js/lucideMotionIconLoader.js) |
 | IconManager | [`IconManager.js`](../../core/client/src/modules/icons/IconManager.js) |
 | Меню (preload) | [`icons-mapping.js`](../../core/client/src/config/icons-mapping.js) |
 | Settings tabs | [`userSettingsTabs.js`](../../core/client/src/core/cms/adp/user/account/component/userSettingsTabs.js) |
@@ -125,7 +136,8 @@ bridge.provideMany(HEADER_USER_MENU_ITEMS_GROUP, '<name>', {
 
 - **Статический хром** рядом с разметкой (стрелки, закрытие, grip) — `import { ChevronDown } from '@lucide/vue'`
 - **Bootstrap Icons** на legacy auth-страницах (`bi bi-*`) — не расширять; новый UI только Lucide
-- Не подключай полный barrel `import('@lucide/vue')` ради динамического списка — см. [`client-perf.mdc`](../../.cursor/rules/client-perf.mdc)
+- Не подключай полный barrel `import('@lucide/vue')` или `import('@respeak/lucide-motion-vue')` ради динамического списка — см. [`client-perf.mdc`](../../.cursor/rules/client-perf.mdc)
+- Анимированный набор меньше статического. Нет файла — `getLucideMotionIconAsync` возвращает `null`, `LucideMotionIcon` показывает `LucideIcon`. При `data-ergo-motion='reduce'` анимированный чанк не грузится
 
 ## Связанные правила
 
