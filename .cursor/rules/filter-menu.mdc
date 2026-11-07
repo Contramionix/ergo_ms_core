@@ -106,7 +106,9 @@ const filterFields = computed(() => [
 | `label` | `''` | подпись над триггером |
 | `disabled` | `false` | блокировка |
 
-**Emits:** `update:modelValue`, `apply`, `reset` (кнопка «Сбросить» внутри меню; поиск снаружи не сбрасывает).
+**Emits:** `update:modelValue`, `apply`, `reset` (кнопка «Сбросить» внутри меню; поиск снаружи не сбрасывает), `flyout-search` (`{ key, query }`), `flyout-more` (`{ key, query }`).
+
+У `select` поле `incremental` значит, что варианты приходят снаружи порциями. Строка поиска их на клиенте не режет, а шлёт `flyout-search`. Прокрутка списка до конца шлёт `flyout-more`, пока у поля `hasMore`. Пока идёт догрузка, у поля `loadingMore`, чтобы запрос не повторялся. Страница дописывает `options`.
 
 ## CSS-переменные
 
