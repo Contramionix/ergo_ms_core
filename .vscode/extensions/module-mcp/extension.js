@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const { spawn } = require('child_process');
+const { toExtensionSpawn } = require('./lib/extension-spawn.cjs');
 
 const OUTPUT_CHANNEL_NAME = 'ERGO MS Module MCP';
 const SYNC_DEBOUNCE_MS = 400;
@@ -332,12 +333,13 @@ async function neutralizeMcpJsonForApiOnce(context, workspaceRoot, ourNames) {
 }
 
 /**
+ * @param {string} workspaceRoot
  * @param {{ name: string, config: { command: string, args: string[] } }[]} entries
  * @param {string[]} enabledNames
  * @param {{ registerServer: (c: any) => void }} api
  * @returns {string[]}
  */
-function registerEnabledServers(entries, enabledNames, api) {
+function registerEnabledServers(workspaceRoot, entries, enabledNames, api) {
   unregisterMcpServers();
   const enabledSet = new Set(enabledNames);
   /** @type {string[]} */
@@ -350,17 +352,16 @@ function registerEnabledServers(entries, enabledNames, api) {
     if (!entry.name || !cfg.command) {
       continue;
     }
+    const spawnCfg = toExtensionSpawn(workspaceRoot, cfg);
     try {
       api.registerServer({
         name: entry.name,
-        server: {
-          command: cfg.command,
-          args: Array.isArray(cfg.args) ? cfg.args : [],
-          env: {},
-        },
+        server: spawnCfg,
       });
       okNames.push(entry.name);
-      log(`[OK] registerServer: ${entry.name} (${entry.source})`);
+      log(
+        `[OK] registerServer: ${entry.name} (${entry.source}) ${spawnCfg.command} ${spawnCfg.args.join(' ')}`,
+      );
     } catch (err) {
       log(
         `[ERROR] registerServer ${entry.name}: ${err instanceof Error ? err.message : String(err)}`,
@@ -423,7 +424,7 @@ async function syncMcpServers(showInfo = false, options = {}) {
       return;
     }
 
-    const okNames = registerEnabledServers(entries, enabledNames, api);
+    const okNames = registerEnabledServers(workspaceRoot, entries, enabledNames, api);
     await context.workspaceState.update(FINGERPRINT_STATE_KEY, fingerprint);
     log(
       `[OK] Sync через Cursor API: каталог ${entries.length}, registerServer: ${okNames.length}`,

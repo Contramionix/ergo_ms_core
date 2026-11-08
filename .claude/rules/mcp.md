@@ -15,7 +15,7 @@ MCP даёт агенту Cursor инструменты для работы с A
 - Код MCP модуля — только в `modules/<имя>/mcp/` (`manifest.yaml` + `server.py`).
 - Ядро: [`.cursor/mcp.registry.yaml`](../../.cursor/mcp.registry.yaml), внутренняя сборка [`.cursor/mcp_sync.py`](../../.cursor/mcp_sync.py), launcher [`.cursor/mcp_launcher.js`](../../.cursor/mcp_launcher.js).
 - Подхват в Cursor — расширение [`.vscode/extensions/module-mcp/`](../../.vscode/extensions/module-mcp/) (**ERGO MS Module Cursor MCP**): `ergoms install-extensions`, Reload Window.
-- **Основной путь:** `vscode.cursor.mcp.registerServer`. [`.cursor/mcp.json`](../../.cursor/mcp.json) при доступном API **не перезаписывается** (кроме однократной очистки серверов ERGO из файла).
+- **Основной путь:** `vscode.cursor.mcp.registerServer`. API не принимает рабочую папку и стартует процесс из домашнего каталога, поэтому расширение подставляет абсолютные пути (launcher, `.` у filesystem) и на Windows запускает `npx` через `node.exe` и `npx-cli.js`, а не через `npx.cmd`. [`.cursor/mcp.json`](../../.cursor/mcp.json) при доступном API **не перезаписывается** (кроме однократной очистки серверов ERGO из файла).
 - Включённые серверы — в `workspaceState` расширения. Включение: **ERGO MS: Enable MCP Servers**. Sync: **ERGO MS: Sync Module Cursor MCP**. Output → **ERGO MS Module MCP**.
 - **Fallback** (нет Cursor MCP API): запись в `mcp.json` **только при реальном diff**.
 - Правила модулей Cursor читает из `modules/<имя>/.cursor/rules/` сам ([`module-cursor-rules.mdc`](../../.cursor/rules/module-cursor-rules.mdc)). Расширение module-rules только снимает старые копии плагинов.
