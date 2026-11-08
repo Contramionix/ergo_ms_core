@@ -114,3 +114,5 @@ core/client/dist/
 # из modules/<имя>/.cursor/rules при каждом старте сессии; источник живёт в репозитории модуля
 .claude/rules/modules/
 .claude/rules/local/
+# MCP для Claude Code: абсолютные пути этой машины, собирает .cursor/mcp_sync.py claude
+.mcp.json
