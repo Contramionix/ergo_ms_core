@@ -1,5 +1,5 @@
 ---
-description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, ImageHoverFrame, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+description: Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, RemovableTags, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, ImageHoverFrame, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 alwaysApply: false
 ---
 
@@ -20,6 +20,7 @@ alwaysApply: false
 | Три позиции: запрещено / не задано / разрешено | `TriStateSwitch` | [`tri-state-switch.mdc`](tri-state-switch.mdc) |
 | Зона выбора файлов (клик + перетаскивание) | `DropZone` | [`drop-zone.mdc`](drop-zone.mdc) |
 | Карточка одного файла (имя, meta, скачать) | `FileCard` | [`file-card.mdc`](file-card.mdc) |
+| Список снимаемых меток | `RemovableTags` | [`removable-tags.mdc`](removable-tags.mdc) |
 | Форма: карточка + строки label/поле | `FormCard`, `FormField` | [`form-card.mdc`](form-card.mdc) |
 | Настройки: карточка + строки label/hint/контрол | `SettingsCard`, `SettingsCardRow` | [`settings-card.mdc`](settings-card.mdc) |
 | Несколько фильтров в toolbar | `FilterMenu` | [`filter-menu.mdc`](filter-menu.mdc) |
