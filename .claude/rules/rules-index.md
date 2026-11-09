@@ -8,7 +8,7 @@ Cursor подключает эти правила по описанию, Claude 
 - [`.cursor/rules/celery-balance.mdc`](../../.cursor/rules/celery-balance.mdc) — Балансировщик Celery — task_footprint.yaml, бюджет хоста, celery-balance, overlay
 - [`.cursor/rules/celery.mdc`](../../.cursor/rules/celery.mdc) — Celery — ergoms start-worker/beat, задачи в modules/, celery_config, логи
 - [`.cursor/rules/client-perf.mdc`](../../.cursor/rules/client-perf.mdc) — Производительность клиента Vue — lazy-чанки, async-модалки, параллельные API, prefetch меню
-- [`.cursor/rules/components.mdc`](../../.cursor/rules/components.mdc) — Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, ImageHoverFrame, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
+- [`.cursor/rules/components.mdc`](../../.cursor/rules/components.mdc) — Индекс UI-компонентов ядра — SelectBox, SearchInput, DecimalInput, DatePicker, TimePicker, ToggleSwitch, TriStateSwitch, DropZone, FileCard, RemovableTags, FormCard, FormField, SettingsCard, SettingsCardRow, FilterMenu, DropDown, TextEditor, TabBar, StepRail, DataTable, UserAvatar, ImageHoverFrame, DocumentViewer, LinkBoard, GraphAtlas, LaneGraph
 - [`.cursor/rules/cursor-browser.mdc`](../../.cursor/rules/cursor-browser.mdc) — Встроенный браузер Cursor, cursor-ide-browser, вход через #login из env/mcp.env, без пароля в чате
 - [`.cursor/rules/data-table.mdc`](../../.cursor/rules/data-table.mdc) — UI ядра — DataTable, раскрывающаяся подстрока и пагинация через enable-pagination
 - [`.cursor/rules/database.mdc`](../../.cursor/rules/database.mdc) — База данных — миграции Django, ORM, SqlAlchemyManager, DBConfig, ergoms
@@ -41,6 +41,7 @@ Cursor подключает эти правила по описанию, Claude 
 - [`.cursor/rules/parser-pages.mdc`](../../.cursor/rules/parser-pages.mdc) — Парсер хранит полный HTML страницы в media через store_parsed_page, каталог pages
 - [`.cursor/rules/person.mdc`](../../.cursor/rules/person.mdc) — Карточка человека Person в ядре — личность без учётки, user_public_id, person_public_id, снимок ФИО, однофамильцы, слияние, CORE_PERSON_*
 - [`.cursor/rules/process-roles.mdc`](../../.cursor/rules/process-roles.mdc) — process_roles.yaml — учёт модульных процессов в ergoms resource-usage через ModuleCatalog
+- [`.cursor/rules/removable-tags.mdc`](../../.cursor/rules/removable-tags.mdc) — UI ядра — Список снимаемых меток — RemovableTags
 - [`.cursor/rules/search.mdc`](../../.cursor/rules/search.mdc) — Централизованный поиск ERGO MS — Meilisearch BM25, core.search, useListSearch, search_indexes.py
 - [`.cursor/rules/security-details.mdc`](../../.cursor/rules/security-details.mdc) — Безопасность ERGO MS подробно — .env, auth, public_id, localStorage, cookies, WebSocket, media_api, инъекции, логи; примеры BAD/GOOD
 - [`.cursor/rules/settings-card.mdc`](../../.cursor/rules/settings-card.mdc) — UI ядра — Настройки — SettingsCard / SettingsCardRow
