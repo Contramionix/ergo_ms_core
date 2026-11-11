@@ -23,6 +23,11 @@
     "stop": [
       {
         "command": "python3 core/deployment/scripts/cursor_browser_queue.py --hook-release"
+      },
+      {
+        "command": "python3 core/deployment/scripts/cursor_module_hooks.py --event stop",
+        "timeout": 180,
+        "loop_limit": 3
       }
     ],
     "sessionEnd": [

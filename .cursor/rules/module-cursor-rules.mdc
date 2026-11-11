@@ -1,23 +1,20 @@
 ---
-description: Правила Cursor в modules/ — .cursor/rules, AGENTS.md, расширение module-rules, sync staging
+description: Правила Cursor в modules/ — вложенные .cursor/rules и короткий AGENTS.md, без копии плагина
 alwaysApply: false
 ---
 
 # Правила Cursor из модулей
 
-Доменные инструкции модуля хранятся в submodule и подхватываются расширением **ERGO MS Module Cursor Rules**.
-
-MCP — отдельное расширение [`.vscode/extensions/module-mcp/`](../../.vscode/extensions/module-mcp/) ([`mcp.mdc`](mcp.mdc)).
+Доменные инструкции модуля лежат в submodule. Cursor читает вложенный `modules/<name>/.cursor/rules/` сам. Копия через plugins API не нужна и дублирует те же файлы в контексте.
 
 ## Кратко
 
 - Источник: `modules/<name>/.cursor/rules/*.mdc`
-- Fallback: `modules/<name>/AGENTS.md` (native nested AGENTS.md)
-- Расширение: [`.vscode/extensions/module-rules/`](../../.vscode/extensions/module-rules/)
-- Установка: `ergoms install-extensions`, затем Reload Window
-- Sync: команда **ERGO MS: Sync Module Cursor Rules** или watcher на `.cursor/rules/**`
-- Staging: `virtual_env/cache/cursor-module-plugins/` (не в git)
+- Fallback без Cursor: `modules/<name>/AGENTS.md`
 - Платформа — только корневой `.cursor/rules/`
+- Расширение [`.vscode/extensions/module-rules/`](../../.vscode/extensions/module-rules/) с версии 1.2.0 только снимает старые копии из `virtual_env/cache/cursor-module-plugins/` и не регистрирует плагины заново. Версия 1.1.1 и VSIX 1.1.1 ещё регистрируют копии: если staging снова появился, где-то стоит старая установка — `ergoms install-extensions`, затем Reload Window ([`vscode-extensions.mdc`](vscode-extensions.mdc))
+- Staging руками не удалять: новое расширение по нему снимает зарегистрированные копии через `removePlugin`, затем удаляет каталог само
+- Claude Code: `.claude/scripts/sync_claude_rules.py` кладёт копии в `.claude/rules/modules/<name>/` (не в git), хук SessionStart пересобирает их. Правила без `globs` в копию не попадают, как и в корне
 
 ## Обязательно
 
@@ -30,34 +27,21 @@ alwaysApply: false
 ---
 ```
 
-- Globs от корня workspace
-- Одно правило — одна тема; короткий чеклист + эталоны в модуле
-- После правки `.mdc` дождись sync (Output → **ERGO MS Module Rules**) или вызови Sync вручную
+- Globs от корня workspace. Одно правило на весь модуль — не длиннее 10 КБ; длиннее режь по темам с узкими globs или оставь только `description` (правило по запросу)
+- Одно правило — одна тема
+- После правки `.mdc` перезагрузка окна не нужна: вложенные правила Cursor подхватывает сам
 
 ## Запрещено
 
 - `alwaysApply: true` в модульных `.mdc`
-- Класть домен модуля только в корневой `.cursor/rules/` (кроме уже существующих legacy; новые — в модуле)
-- Симлинки staging вручную — расширение копирует файлы само
-
-## Проверка
-
-1. В модуле есть хотя бы один `.mdc` в `.cursor/rules/`
-2. `ergoms install-extensions` → установлен `ergo-ms.ergo-ms-module-rules-*`
-3. Reload Window → в Output канала расширения: модуль в списке, `addPlugin` ok
-4. Открыт файл под `modules/<name>/` — правило модуля в контексте агента
-5. Если `vscode.cursor.plugins` недоступен — warning; остаётся `AGENTS.md`
-
-Эталон: [`modules/module_template/.cursor/rules/`](../../modules/module_template/.cursor/rules/) (в т.ч. living template), [`AGENTS.md`](../../modules/module_template/AGENTS.md). Новый паттерн ядра для модулей — демо в шаблоне + `ergoms module_template:patterns-check`.
+- Снова вызывать `addPlugin` / копировать правила в staging
+- Класть домен модуля только в корневой `.cursor/rules/`
 
 ## Связанные правила
 
 | Тема | Файл |
 |------|------|
 | Структура модуля | [`modules.mdc`](modules.mdc) |
-| Документация модуля (AGENTS/README) | [`module-docs.mdc`](module-docs.mdc) |
-| Пожелания из чата → BEHAVIOR.md | [`module-behavior.mdc`](module-behavior.mdc) |
-| MCP модулей | [`mcp.mdc`](mcp.mdc) |
+| Документация модуля | [`module-docs.mdc`](module-docs.mdc) |
+| Пожелания из чата | [`module-behavior.mdc`](module-behavior.mdc) |
 | Стиль `.mdc` | [`writing-docs-and-rules.mdc`](writing-docs-and-rules.mdc) |
-| Изоляция ядра | [`core-module-isolation.mdc`](core-module-isolation.mdc) |
-| Расширения / ergoms | [`npm-workspace.mdc`](npm-workspace.mdc) → `install-extensions` |

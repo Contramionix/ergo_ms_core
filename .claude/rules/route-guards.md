@@ -1,0 +1,51 @@
+---
+paths:
+  - "**/routeGuard.js"
+  - "core/client/src/modules/routing/**"
+  - "core/client/src/js/session/**"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Route guards (клиент)
+
+Дополнительные проверки навигации (контекст организации, onboarding и т.п.) — через hook-файл модуля. Ядро **не** импортирует доменный код модуля напрямую в `routers.js`.
+
+## Файл guard
+
+`modules/<имя>/client/js/routeGuard.js` — только в этой папке (как `permission-rules.js`).
+
+```javascript
+import { organizationGuard } from './organizationGuard.js'
+
+export { organizationGuard as routeGuard }
+export default organizationGuard
+```
+
+Экспорт: named `routeGuard` или `default` — **async-функция** `(to, from, next?)`. Ядро вызывает её с локальным `next` (не callback Vue Router). Предпочтительно возвращать результат: `true` / ничего — пропустить, `false` — отменить, объект или путь — редирект. Опционально числовой `order` или `routeGuardOrder` (по умолчанию 100) задаёт порядок в цепочке beforeEach.
+
+Подхват — [`RouteGuardsManager.js`](../../core/client/src/modules/routing/RouteGuardsManager.js) через [`ModuleLoader.js`](../../core/client/src/modules/core/ModuleLoader.js). Применение — `beforeEach` в [`routers.js`](../../core/client/src/js/routers.js).
+
+Ядро: `core/client/src/core/**/js/routeGuard.js` (опционально).
+
+Страницы входа (`meta.startRoute`, имя `Login`) в [`routers.js`](../../core/client/src/js/routers.js) выходят из `beforeEach` **до** session-scope и module guards. Если cookie `ergo_session` есть, сначала `whenSessionReady()`, иначе форма входа мигнёт на F5. Маршрут `Login` обязан быть в matcher — [`nginx-spa-boot.mdc`](../../.cursor/rules/nginx-spa-boot.mdc).
+
+## Порядок в beforeEach
+
+1. Проверка токена / auth
+2. **Platform session-scope** — `runSessionScopeGuard` в [`routers.js`](../../core/client/src/js/routers.js) для `meta.requiresSessionScope` / `requiresActiveSessionScope` (welcome/home из `session.scope_entry_routes`)
+3. **Route guards модулей** (по `order` / `routeGuardOrder` по возрастанию, затем по имени модуля) — доменная логика (например `validateSession`)
+4. Permission rules и ADP access
+
+Модульный `routeGuard` **не обязан** повторно вызывать `runSessionScopeGuard`, если достаточно platform-проверки. Владелец scope может добавить доменную валидацию в своём guard после шага 2.
+
+При redirect guard возвращает объект маршрута (`return { name: '...' }` или `next({ name: '...' })`) — ядро перехватывает object-redirect и прерывает цепочку. Platform `beforeEach` в [`routers.js`](../../core/client/src/js/routers.js) не использует третий аргумент `next` Vue Router.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Права на маршрутах (UX) | [`permission_rules.mdc`](../../.cursor/rules/permission_rules.mdc) |
+| Эмуляция 404 | [`route-concealment.mdc`](../../.cursor/rules/route-concealment.mdc) |
+| Вход за nginx, Login в matcher | [`nginx-spa-boot.mdc`](../../.cursor/rules/nginx-spa-boot.mdc) |
+| Архитектура hook-файлов | [`struct.mdc`](../../.cursor/rules/struct.mdc) |
+| Модули | [`modules.mdc`](../../.cursor/rules/modules.mdc) |

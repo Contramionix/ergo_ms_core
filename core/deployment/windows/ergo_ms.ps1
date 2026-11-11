@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+﻿# Права администратора проверяются в Main только для команд управления системой.
 
 <#
 
@@ -373,7 +373,7 @@ function Main {
 
                 Invoke-PoetryCommand -CommandArgs $RemainingArgs -Root $projectRoot
 
-                return
+                exit $LASTEXITCODE
 
             }
 
@@ -381,7 +381,7 @@ function Main {
 
                 Invoke-ApiCommand -CommandArgs $RemainingArgs -Root $projectRoot
 
-                return
+                exit $LASTEXITCODE
 
             }
 
@@ -389,7 +389,7 @@ function Main {
 
                 Invoke-MediaApiCommand -CommandArgs $RemainingArgs -Root $projectRoot
 
-                return
+                exit $LASTEXITCODE
 
             }
 

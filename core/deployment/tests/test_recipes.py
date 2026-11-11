@@ -49,6 +49,24 @@ class RecipeRegistryTests(unittest.TestCase):
             self.assertIn(f'name: {name}', text)
             self.assertIn(name, RECIPE_REGISTRY)
 
+    def test_deploy_recipes_snapshot_before_migrate(self) -> None:
+        all_names = [step.name for step in RECIPE_REGISTRY['deploy-all'].steps]
+        self.assertLess(all_names.index('git_submodule_update'), all_names.index('record_deploy_revision'))
+        self.assertLess(all_names.index('backup_database'), all_names.index('migrate'))
+        api_names = [step.name for step in RECIPE_REGISTRY['deploy-api'].steps]
+        self.assertLess(api_names.index('backup_database'), api_names.index('migrate'))
+        api_revision = next(
+            step for step in RECIPE_REGISTRY['deploy-api'].steps
+            if step.name == 'record_deploy_revision'
+        )
+        all_revision = next(
+            step for step in RECIPE_REGISTRY['deploy-all'].steps
+            if step.name == 'record_deploy_revision'
+        )
+        self.assertEqual(api_revision.paths, ('core/api', 'core/media_api'))
+        self.assertEqual(all_revision.paths, ('core/api', 'core/client', 'core/media_api'))
+        self.assertNotIn('backup_database', [step.name for step in RECIPE_REGISTRY['deploy-client'].steps])
+
 
 if __name__ == '__main__':
     unittest.main()

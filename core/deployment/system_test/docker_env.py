@@ -61,12 +61,12 @@ class DockerEnvironment(HostWorktreeEnvironment):
             raise RuntimeError(detail or f'docker-up exit {result.returncode}')
         self._sync_ports_from_compose_env()
         try:
-            wait_http(self.http_base(), timeout_sec=240.0, path='/api/system/ready/')
+            wait_http(self.http_base(), timeout_sec=240.0, path='/api/system/ready/', expected_status=200)
         except RuntimeError as exc:
             raise RuntimeError(f'{exc}; {self._http_debug_detail()}') from None
 
     def ensure_api(self) -> None:
-        wait_http(self.http_base(), timeout_sec=180.0, path='/api/system/ready/')
+        wait_http(self.http_base(), timeout_sec=180.0, path='/api/system/ready/', expected_status=200)
 
     def _sync_ports_from_compose_env(self) -> None:
         path = self.tree_root / 'core' / 'deployment' / 'docker' / '.compose.env'
@@ -96,11 +96,13 @@ class DockerEnvironment(HostWorktreeEnvironment):
         wait_http(self.client_base(), timeout_sec=120.0, path='/')
 
     def teardown(self) -> None:
-        try:
-            self.run_ergoms('docker-down', '-v', '--remove-orphans', timeout=1800)
-        except Exception:
-            pass
-        self._force_remove_prefix_containers()
+        if self._configured:
+            if self.tree_root.is_dir():
+                try:
+                    self.run_ergoms('docker-down', '-v', '--remove-orphans', timeout=1800)
+                except Exception:
+                    pass
+            self._force_remove_prefix_containers()
         HostWorktreeEnvironment.teardown(self)
 
     def _seed_poetry_volume(self) -> None:
@@ -204,6 +206,7 @@ class DockerEnvironment(HostWorktreeEnvironment):
             f'API_JWT_SIGNING_KEY={secrets.token_hex(32)}\n'
             'DEBUG=false\n'
             'ERGO_LOG_CONSOLE=false\n'
+            'API_AUTORELOAD=false\n'
         )
         (self.tree_root / '.env').write_text(env_text, encoding='utf-8')
         (self.tree_root / 'databases.yaml').write_text(
@@ -217,3 +220,4 @@ class DockerEnvironment(HostWorktreeEnvironment):
             '    port: 5432\n',
             encoding='utf-8',
         )
+        self._configured = True

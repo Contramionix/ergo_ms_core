@@ -5,9 +5,9 @@
 Использование: ergoms core-rules-check
 
 Включает:
-- validate_module_isolation --scope=core --fail-on-warning (ядро)
-- validate_module_isolation --scope=all (отчёт по modules/, без падения CI)
-- validate_bridge_contracts --fail-on-warning (схемы дескрипторов моста)
+- validate_rules_bundle: один процесс Django на изоляцию ядра,
+  отчёт modules/ и схемы контрактов моста
+- отчёт по modules/ не валит проверку; ядро и контракты валят
 - запрет hardcoded имён модулей во всём ядре и правилах Cursor
   (весь core/, .cursor/rules/; имена — папки modules/ плюс MICROSERVICE_MODULES)
 - запрет console.error в прикладном коде клиента (кроме logError.js / logger.js)
@@ -19,11 +19,13 @@
 - сырой ModelViewSet в core/api без ObjectPermissionMixin / BaseModelViewSet / admin-маркера
 - README.md и AGENTS.md у каждого установленного модуля (есть api/apps.py или client/)
 - контракт logout: один POST на волну, nginx избыток → 204 (не 429)
+- размер always-правил, правила на весь модуль и BEHAVIOR.md без behavior/
 """
 
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
 import subprocess
@@ -195,20 +197,36 @@ def _python_executable() -> Path:
     return Path(sys.executable)
 
 
-def run_module_isolation_check(*, scope: str, fail_on_error: bool) -> list[str]:
-    """Запускает Django management command validate_module_isolation."""
-    errors: list[str] = []
+def bundle_failed_flags(payload: object) -> tuple[bool, bool]:
+    """Ядро и контракты валят проверку. Отчёт по модулям — нет."""
+    if not isinstance(payload, dict):
+        raise ValueError('rules bundle is not an object')
+    core = payload.get('core')
+    bridge = payload.get('bridge')
+    core_failed = isinstance(core, dict) and bool(core.get('failed'))
+    bridge_failed = isinstance(bridge, dict) and bool(bridge.get('failed'))
+    return core_failed, bridge_failed
+
+
+def _bundle_payload(stdout: str) -> object:
+    for line in reversed(stdout.splitlines()):
+        text = line.strip()
+        if text.startswith('{') and text.endswith('}'):
+            return json.loads(text)
+    raise ValueError('rules bundle json is missing')
+
+
+def _section_text(section: object) -> str:
+    if not isinstance(section, dict):
+        return ''
+    return str(section.get('text') or '').rstrip()
+
+
+def run_bundled_django_checks() -> list[str]:
+    """Один подъём Django вместо трёх отдельных команд."""
     python = _python_executable()
-    cmd = [
-        str(python),
-        '-m',
-        'commands',
-        'validate_module_isolation',
-        f'--scope={scope}',
-        '--fail-on-warning',
-    ]
     result = subprocess.run(
-        cmd,
+        [str(python), '-m', 'commands', 'validate_rules_bundle'],
         cwd=str(API_DIR),
         env={**os.environ, 'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'},
         capture_output=True,
@@ -216,38 +234,30 @@ def run_module_isolation_check(*, scope: str, fail_on_error: bool) -> list[str]:
         encoding='utf-8',
         errors='replace',
     )
-    output = (result.stdout or '') + (result.stderr or '')
-    if output.strip():
-        print(output.rstrip())
-    if result.returncode != 0 and fail_on_error:
-        errors.append(t('core_rules_isolation_failed', scope=scope))
-    return errors
+    try:
+        payload = _bundle_payload(result.stdout)
+        core_failed, bridge_failed = bundle_failed_flags(payload)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        if result.stdout.strip():
+            print(result.stdout.rstrip())
+        if result.stderr.strip():
+            print(result.stderr.rstrip())
+        return [t('core_rules_isolation_failed', scope='core')]
 
-
-def run_bridge_contracts_check() -> list[str]:
-    """Запускает Django management command validate_bridge_contracts."""
     errors: list[str] = []
-    python = _python_executable()
-    cmd = [
-        str(python),
-        '-m',
-        'commands',
-        'validate_bridge_contracts',
-        '--fail-on-warning',
-    ]
-    result = subprocess.run(
-        cmd,
-        cwd=str(API_DIR),
-        env={**os.environ, 'PYTHONIOENCODING': 'utf-8', 'PYTHONUTF8': '1'},
-        capture_output=True,
-        text=True,
-        encoding='utf-8',
-        errors='replace',
-    )
-    output = (result.stdout or '') + (result.stderr or '')
-    if output.strip():
-        print(output.rstrip())
-    if result.returncode != 0:
+    print(t('core_rules_heading_isolation_core'))
+    print(_section_text(payload.get('core')))
+    if core_failed:
+        errors.append(t('core_rules_isolation_failed', scope='core'))
+
+    print()
+    print(t('core_rules_heading_isolation_all'))
+    print(_section_text(payload.get('modules')))
+
+    print()
+    print(t('core_rules_heading_bridge'))
+    print(_section_text(payload.get('bridge')))
+    if bridge_failed:
         errors.append(t('core_rules_bridge_failed'))
     return errors
 
@@ -716,6 +726,66 @@ def check_module_docs() -> tuple[list[str], list[str]]:
     return violations, skipped
 
 
+ALWAYS_RULES_LIMIT = 20 * 1024
+MODULE_RULE_LIMIT = 10 * 1024
+BEHAVIOR_LIMIT = 15 * 1024
+_WHOLE_MODULE_GLOB = re.compile(r'^modules/[^/*]+/\*\*$')
+
+
+def _rule_frontmatter(text: str) -> str:
+    if not text.startswith('---'):
+        return ''
+    parts = text.split('---', 2)
+    return parts[1] if len(parts) >= 3 else ''
+
+
+def _kb(size: int) -> int:
+    return max(1, (size + 1023) // 1024)
+
+
+def check_cursor_context_budget() -> list[str]:
+    """Лимиты из writing-docs-and-rules.mdc: always, glob на весь модуль, BEHAVIOR.md."""
+    errors: list[str] = []
+    always_total = 0
+    if CURSOR_RULES_DIR.is_dir():
+        for path in sorted(CURSOR_RULES_DIR.glob('*.mdc')):
+            frontmatter = _rule_frontmatter(path.read_text(encoding='utf-8'))
+            if re.search(r'(?m)^alwaysApply:\s*true\s*$', frontmatter):
+                always_total += path.stat().st_size
+    if always_total > ALWAYS_RULES_LIMIT:
+        errors.append(t(
+            'core_rules_context_always',
+            size=_kb(always_total),
+            limit=_kb(ALWAYS_RULES_LIMIT),
+        ))
+
+    if MODULES_DIR.is_dir():
+        for path in sorted(MODULES_DIR.glob('*/.cursor/rules/*.mdc')):
+            frontmatter = _rule_frontmatter(path.read_text(encoding='utf-8'))
+            globs = re.findall(r'(?m)^[ \t]+-[ \t]+["\']?([^"\'\n#]+)', frontmatter)
+            whole = any(_WHOLE_MODULE_GLOB.match(item.strip().strip('"\'')) for item in globs)
+            size = path.stat().st_size
+            if whole and size > MODULE_RULE_LIMIT:
+                errors.append(t(
+                    'core_rules_context_module_rule',
+                    rel=path.relative_to(PROJECT_ROOT),
+                    size=_kb(size),
+                    limit=_kb(MODULE_RULE_LIMIT),
+                ))
+        for behavior in sorted(MODULES_DIR.glob('*/BEHAVIOR.md')):
+            if (behavior.parent / 'behavior').is_dir():
+                continue
+            size = behavior.stat().st_size
+            if size > BEHAVIOR_LIMIT:
+                errors.append(t(
+                    'core_rules_context_behavior',
+                    rel=behavior.relative_to(PROJECT_ROOT),
+                    size=_kb(size),
+                    limit=_kb(BEHAVIOR_LIMIT),
+                ))
+    return errors
+
+
 def main() -> int:
     all_errors: list[str] = []
 
@@ -723,14 +793,7 @@ def main() -> int:
         print()
         print(t(key))
 
-    print(t('core_rules_heading_isolation_core'))
-    all_errors.extend(run_module_isolation_check(scope='core', fail_on_error=True))
-
-    _section('core_rules_heading_isolation_all')
-    run_module_isolation_check(scope='all', fail_on_error=False)
-
-    _section('core_rules_heading_bridge')
-    all_errors.extend(run_bridge_contracts_check())
+    all_errors.extend(run_bundled_django_checks())
 
     _section('core_rules_heading_bridge_manifests')
     manifest_violations = find_manifest_violations()
@@ -873,6 +936,15 @@ def main() -> int:
             print(format_console('error', msg))
     else:
         print(format_console('ok', t('core_rules_sh_ok')))
+
+    _section('core_rules_heading_context_budget')
+    context_violations = check_cursor_context_budget()
+    if context_violations:
+        all_errors.extend(context_violations)
+        for item in context_violations:
+            print(format_console('error', item))
+    else:
+        print(format_console('ok', t('core_rules_context_budget_ok')))
 
     _section('core_rules_heading_logout_storm')
     logout_storm_violations = find_logout_storm_guard_violations()

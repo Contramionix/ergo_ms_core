@@ -20,6 +20,7 @@ if str(_DEPLOYMENT_DIR) not in sys.path:
 
 from console_tags import configure_stdio_utf8, format_console  # noqa: E402
 from huggingface.registry import load_resolved_models  # noqa: E402
+from runtime_requirements import RuntimeRequirementsError  # noqa: E402
 from huggingface.snapshot import adopt_legacy_snapshot  # noqa: E402
 from huggingface.snapshot import install as install_snapshot  # noqa: E402
 from huggingface.snapshot import is_installed  # noqa: E402
@@ -124,14 +125,13 @@ def main(argv: list[str] | None = None) -> int:
     install_parser.add_argument('--repo', default='', help='Только этот org/name')
     args = parser.parse_args(argv)
     root = _resolve_root(getattr(args, 'root', None))
-    if args.command == 'list':
-        return cmd_list(root)
-    return cmd_install(
-        root,
-        repo=args.repo,
-        force=args.force,
-        include_optional=args.include_optional,
-    )
+    try:
+        if args.command == 'list':
+            return cmd_list(root)
+        return cmd_install(root, repo=args.repo, force=args.force, include_optional=args.include_optional)
+    except (RuntimeRequirementsError, ValueError, OSError) as exc:
+        print(format_console('error', str(exc)), file=sys.stderr)
+        return 1
 
 
 if __name__ == '__main__':

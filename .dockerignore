@@ -15,5 +15,11 @@ virtual_env/packages
 virtual_env/client-remotes
 virtual_env/client-standalone
 virtual_env/client-shell
+virtual_env/backups
+virtual_env/resources
+virtual_env/trained_models
+virtual_env/static_api
+modules/competence_core/data
+modules/dissertation_sandbox/data
 .env
 .env.*

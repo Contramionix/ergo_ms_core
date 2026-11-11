@@ -4,6 +4,8 @@ import re
 import unittest
 from pathlib import Path
 
+import yaml
+
 import _bootstrap  # noqa: F401
 
 from command_conf import (  # noqa: E402
@@ -23,6 +25,10 @@ _COMMANDS_CONF = _DEPLOYMENT_DIR / 'commands.conf'
 _PS1 = _DEPLOYMENT_DIR / 'windows' / 'ergo_ms.ps1'
 _SH = _DEPLOYMENT_DIR / 'linux' / 'ergo_ms.sh'
 _HELP = _DEPLOYMENT_DIR / 'help.manifest.yaml'
+_HELP_LOCALES = {
+    'en': _DEPLOYMENT_DIR / 'locales' / 'en' / 'help.manifest.yaml',
+    'fr': _DEPLOYMENT_DIR / 'locales' / 'fr' / 'help.manifest.yaml',
+}
 _PS1_COMMANDS = _DEPLOYMENT_DIR / 'windows' / 'lib' / 'commands.ps1'
 _SH_COMMANDS = _DEPLOYMENT_DIR / 'linux' / 'lib' / 'commands.sh'
 
@@ -43,6 +49,15 @@ _HOST_BUILTIN = (
     'install-services',
     'start',
 )
+
+
+def _help_command_names(path: Path) -> list[tuple[str, list[str]]]:
+    data = yaml.safe_load(path.read_text(encoding='utf-8'))
+    sections: list[tuple[str, list[str]]] = []
+    for section in data['sections']:
+        names = [command['name'] for command in section.get('commands') or []]
+        sections.append((section['id'], names))
+    return sections
 
 
 class CommandsCrossPlatformTests(unittest.TestCase):
@@ -100,11 +115,20 @@ class CommandsCrossPlatformTests(unittest.TestCase):
         self.assertIn('function Set-ModuleApiProcessRole', self.ps1_commands)
         self.assertIn('$env:ERGO_PROCESS_ROLE = "module:$moduleName"', self.ps1_commands)
 
-    def test_test_system_is_registered(self) -> None:
-        self.assertIn('test_system', self.conf)
-        self.assertIn('test-system', self.conf)
-        self.assertIn('scripts/test_system.py', self.conf['test_system'].replace('\\', '/'))
-        self.assertIn('name: test_system', self.help_text)
+    def test_removed_command_names_are_gone(self) -> None:
+        removed = (
+            'deployment-test',
+            'test_system',
+            'test-system',
+            'start-all-services',
+            'stop-all-services',
+            'restart-all-services',
+            'status-all-services',
+        )
+        for name in removed:
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.conf)
+                self.assertNotIn(f'name: {name}', self.help_text)
 
     def test_system_test_is_registered(self) -> None:
         self.assertIn('system-test', self.conf)
@@ -125,6 +149,22 @@ class CommandsCrossPlatformTests(unittest.TestCase):
         tls_on_windows = LINUX_ONLY_WRAPPER_COMMANDS & windows
         self.assertEqual(tls_on_windows, set(), msg='TLS install is Linux-only')
         self.assertTrue(PROXY_WRAPPER_COMMANDS <= (windows | linux))
+
+    def test_help_command_names_match_across_locales(self) -> None:
+        russian = _help_command_names(_HELP)
+        for language, path in _HELP_LOCALES.items():
+            other = _help_command_names(path)
+            self.assertEqual(
+                [section_id for section_id, _names in russian],
+                [section_id for section_id, _names in other],
+                msg=f'{language}: section ids differ from Russian help',
+            )
+            for (section_id, russian_names), (_other_id, other_names) in zip(russian, other, strict=True):
+                self.assertEqual(
+                    other_names,
+                    russian_names,
+                    msg=f'{language} {section_id}: command names differ from Russian help',
+                )
 
     def test_help_names_resolve_to_conf_or_wrapper(self) -> None:
         help_names = set(re.findall(r'^\s+- name: ([a-zA-Z0-9_-]+)\s*$', self.help_text, re.M))

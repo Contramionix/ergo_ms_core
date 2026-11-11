@@ -1,0 +1,126 @@
+---
+paths:
+  - "core/client/**/*.vue"
+  - "core/client/**/*.js"
+  - "modules/**/client/**/*.vue"
+  - "modules/**/client/**/*.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# SearchInput — поле текстового поиска
+
+Для **любого** поля текстового поиска в toolbar, фильтрах, таблицах и модалках (ядро и модули) используй **`SearchInput`** из ядра.
+
+Компонент: `@/components/SearchInput.vue`
+
+## Обязательно
+
+- Новые и правки существующих toolbar/фильтров с поиском — **только** `SearchInput`
+- Импорт: `import SearchInput from '@/components/SearchInput.vue'`
+- Адаптивность — через prop `layout`, не через локальные обёртки `.search-input-wrapper`
+
+## Запрещено
+
+```vue
+<!-- BAD — inline-поиск с иконкой -->
+<div class="search-input-wrapper">
+  <Search :size="16" class="search-icon" />
+  <input v-model="query" type="search" class="form-control search-input" />
+</div>
+
+<!-- BAD — дублирующая обёртка только ради стилей поиска -->
+<div class="search-wrapper">
+  <input type="search" class="form-control search-input" @input="onSearch" />
+</div>
+
+<!-- BAD — свой SearchInput в модуле без явной причины -->
+```
+
+**Исключения:** спецкомпоненты с выпадающими результатами (например `HeaderSearch.vue`), не-text поля (`type="date"`, `type="number"`).
+
+Внутри выпадающего меню (`SelectBox` с `searchable`) — `layout="fill"` и стили родителя под полосу меню; не toolbar `grow`/`fixed`.
+
+## Базовый пример
+
+```vue
+<script setup>
+import SearchInput from '@/components/SearchInput.vue'
+
+const searchQuery = ref('')
+</script>
+
+<template>
+  <SearchInput v-model="searchQuery" placeholder="Поиск..." />
+</template>
+```
+
+## Типичные сценарии
+
+### FiltersBar / toolbar модуля
+
+```vue
+<SearchInput
+  v-model="searchModel"
+  placeholder="Поиск по названию..."
+  layout="grow"
+  :show-icon="true"
+/>
+```
+
+### Admin toolbar
+
+```vue
+<SearchInput
+  :model-value="searchQuery"
+  layout="fixed"
+  placeholder="Поиск по пользователям..."
+  :show-icon="true"
+  background="secondary"
+  focus-border="primary"
+  @update:model-value="handleSearchQuery"
+/>
+```
+
+### Компактный поиск без иконки
+
+```vue
+<SearchInput v-model="query" placeholder="Поиск..." />
+```
+
+## Частые props
+
+| Prop | По умолчанию | Когда |
+|------|--------------|--------|
+| `modelValue` | `''` | v-model / `:model-value` + `@update:model-value` |
+| `placeholder` | `'Поиск...'` | подсказка в поле |
+| `label` | — | подпись над полем (AuditLog, ProfileChangeRequests) |
+| `id` | auto | для `<label for>` и a11y |
+| `showIcon` | `false` | `:show-icon="true"` — иконка `Search` слева |
+| `clearable` | `true` | `:clearable="false"` — скрыть крестик очистки |
+| `background` | `'primary'` | `'secondary'` — admin toolbar |
+| `focusBorder` | `'default'` | `'primary'` — border без shadow при focus (admin) |
+| `layout` | `'grow'` | `'fixed'` — admin toolbar (`flex: 0 1 280px`); `'fill'` — на всю ширину родителя (меню SelectBox) |
+| `disabled` | `false` | блокировка ввода |
+
+Крестик виден, пока в поле есть текст; клик очищает значение (`update:modelValue` / `input` / `clear`) и возвращает фокус в input. Нативный clear у `type="search"` скрыт.
+
+## CSS-переменные
+
+На обёртке страницы или родителе:
+
+```scss
+.my-toolbar :deep(.search-input) {
+  --search-input-height: 38px;
+  --search-input-font-size: 0.875rem;
+  --search-input-icon-size: 16px;
+  --search-input-border-radius: 6px;
+}
+```
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Другие компоненты ядра | [`components.mdc`](../../.cursor/rules/components.mdc) |
+| Выпадающие списки | [`select-box.mdc`](../../.cursor/rules/select-box.mdc) |
+| Клиентские соглашения | [`client_code.mdc`](../../.cursor/rules/client_code.mdc) |

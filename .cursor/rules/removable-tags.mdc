@@ -1,0 +1,34 @@
+---
+description: UI ядра — Список снимаемых меток — RemovableTags
+alwaysApply: false
+---
+
+## Список снимаемых меток — RemovableTags
+
+Компонент: `@/components/RemovableTags.vue`.
+
+Ряд «пилюль» со своим крестиком. Родитель хранит массив и сам добавляет и убирает строки. Не копируй такой список в модуле.
+
+```vue
+<script setup>
+import RemovableTags from '@/components/RemovableTags.vue'
+</script>
+
+<template>
+  <RemovableTags
+    :items="labels"
+    :remove-label="(label) => `Убрать ${label}`"
+    @remove="removeLabel"
+  />
+</template>
+```
+
+Пустой `items` ничего не рисует. У кнопки нет текста, поэтому `removeLabel` обязателен: строка на все метки или функция `(item) => string`.
+
+| Prop | Когда |
+|------|-------|
+| `items` | уникальные строки; текст метки и ключ списка — сама строка |
+| `disabled` | крестик не нажимается |
+| `removeLabel` | `aria-label` кнопки снятия |
+
+Событие `remove` отдаёт снятую строку.

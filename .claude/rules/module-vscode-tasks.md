@@ -1,0 +1,134 @@
+---
+paths:
+  - "**/vscode.tasks.yaml"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Модульные задачи VS Code / Cursor
+
+Задачи IDE для **ядра** живут в [`.vscode/tasks.json`](../../.vscode/tasks.json). Задачи **модуля** модуль объявляет сам — ядро и корневой `tasks.json` не знают имён модулей. Это тот же паттерн декомпозиции, что `ergoms.conf`, `process_roles.yaml`, `host_lifecycle.yaml`: декларативный hook + discovery, без правок монолита ради одного модуля.
+
+Формат полей и shell-задач ядра — [`vscode-tasks.mdc`](../../.cursor/rules/vscode-tasks.mdc).
+
+## Кратко
+
+- Hook: `modules/<name>/vscode.tasks.yaml`
+- Discovery Run Task: расширение [`ergo-ms-tasks`](../../.vscode/extensions/tasks) (`provideTasks`, тип `ergo-module`)
+- Агрегаты `setup-full` / `start-all`: поле `include_in` → [`module_tasks_loader.py`](../../core/deployment/scripts/module_tasks_loader.py)
+- Учитываются только включённые модули (есть `api/` или `client/`; нет в `DISABLED_MODULES`)
+- Команда задачи — только `ergoms …` (обычно `ergoms <name>:<команда>`)
+- Корневой `.vscode/tasks.json` — **только** инфраструктура ядра; модульные команды — в hook
+
+## Обязательно
+
+- Нужна точка в Run Task для сценария модуля — добавь `vscode.tasks.yaml`, не правь `.vscode/tasks.json`
+- У каждой задачи: уникальный `label`, `detail` на русском, `command` с `ergoms`
+- Поле `module` = имя каталога модуля
+- Установка / долгоживущий процесс модуля в **Setup Full** / **Start All** — только через `include_in`, не правкой compound в `tasks.json`
+
+## Запрещено
+
+```json
+// BAD — знание модуля в монолите ядра
+{
+  "label": "My Module: Parse",
+  "type": "shell",
+  "command": "ergoms <name>:parse"
+}
+```
+
+```yaml
+# GOOD — hook в модуле
+# modules/<name>/vscode.tasks.yaml
+module: <name>
+tasks:
+  - label: "My Module: Parse"
+    detail: "Запустить разбор данных модуля"
+    command: "ergoms <name>:parse"
+```
+
+Не добавляй имена модулей в `dependsOn` у `Start All Services` / `Setup Full System` — используй `include_in`.
+
+## include_in (агрегаты)
+
+| Значение | Куда попадает |
+|----------|----------------|
+| `setup-full` | шаг `ModuleSetupTasksStep` в рецепте `ergoms setup` / Setup Full System (**до** `MigrateStep`) |
+| `setup-full-after-migrate` | шаг `ModuleSetupTasksAfterMigrateStep` (**после** `MigrateStep`) — когда нужна схема БД |
+| `start-all` | `ergoms start-all` и multi-terminal **Module Services** в Start All Services |
+| `logs-all` | multi-terminal **Logs: All Services** (`provider: ergo-sync`, `target: logs-all`). API/worker/Beat микросервисов ядро сводит к трём общим хвостам по `host_lifecycle.yaml`, не через этот hook |
+
+- `hide: true` скрывает задачу из Run Task, но **не** исключает из агрегата
+- Порядок: `order` (число), затем имя модуля, затем `label`
+- Задачи `setup-full` выполняют **до** миграций (после EnsurePostgres/Redis/Meilisearch/Nginx): расширения БД и portable-пакеты модулей должны быть готовы к `CREATE EXTENSION` / схеме
+- Задачи `setup-full-after-migrate` — **после** миграций (индексация RAG, данные, которым нужна ORM-схема)
+- Потребители: [`module_tasks_loader.py`](../../core/deployment/scripts/module_tasks_loader.py), [`start_all_dev.py`](../../core/deployment/scripts/start_all_dev.py), расширение [`ergo-ms-tasks`](../../.vscode/extensions/tasks) (`sync_vscode_logs_services.py --json`)
+
+```yaml
+module: <name>
+tasks:
+  - label: "My Module: Install"
+    detail: "Установить зависимости модуля"
+    command: "ergoms <name>:install"
+    hide: true
+    include_in:
+      - setup-full
+
+  - label: "My Module: Start"
+    detail: "Запустить демон модуля в терминале"
+    command: "ergoms <name>:start-daemon"
+    panel: new
+    include_in:
+      - start-all
+
+  - label: "My Module: Logs"
+    detail: "Хвост логов демона модуля"
+    command: "ergoms <name>:logs-daemon 500"
+    hide: true
+    include_in:
+      - logs-all
+```
+
+## Схема
+
+```yaml
+module: <name>
+tasks:
+  - label: "<Name>: Action"
+    detail: "Кратко по-русски, что делает задача"
+    command: "ergoms <name>:<команда>"
+    # panel: shared   # или new
+    # hide: false
+    # order: 0
+    # include_in:
+    #   - setup-full
+    #   - start-all
+    #   - logs-all
+```
+
+| Поле | Смысл |
+|------|--------|
+| `module` | Имя каталога; при несовпадении задачи модуля пропускаются |
+| `label` | Уникален в workspace; коллизия — первое объявление |
+| `detail` | Подпись в Run Task |
+| `command` | Только `ergoms …` |
+| `hide` | `true` — не показывать в Run Task (агрегаты всё равно видят задачу) |
+| `include_in` | Список: `setup-full`, `setup-full-after-migrate`, `start-all`, `logs-all` |
+| `order` | Порядок внутри агрегата (меньше — раньше) |
+| `panel` | `shared` или `new` (терминал Run Task) |
+| `optional` | `true` — ошибка задачи в setup-full / setup-full-after-migrate не останавливает рецепт (предупреждение и дальше) |
+
+Эталон: `modules/<name>/vscode.tasks.yaml` рядом с `ergoms.conf` (шаблон модуля в репозитории).
+
+Установка расширения: `ergoms install-extensions`, затем Reload Window.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Формат задач ядра / detail / PATH | [`vscode-tasks.mdc`](../../.cursor/rules/vscode-tasks.mdc) |
+| Структура модулей | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Discovery hook’ов в архитектуре | [`struct.mdc`](../../.cursor/rules/struct.mdc) |
+| Команды модуля | [`ergoms-module-help.mdc`](../../.cursor/rules/ergoms-module-help.mdc) |
+| Роли процессов | [`process-roles.mdc`](../../.cursor/rules/process-roles.mdc) |
+| Host lifecycle | [`host-lifecycle.mdc`](../../.cursor/rules/host-lifecycle.mdc) |

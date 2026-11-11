@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { readdir, mkdir, rm, readFile } from 'fs/promises';
+import { readdir, mkdir, rm, readFile, copyFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import os from 'os';
@@ -10,6 +10,7 @@ import {
   removeLegacyExtensionDirs,
   resolveProjectPython,
   runCodeCli,
+  vsixDriftFromSource,
 } from '../lib/extension-cli.js';
 import { createRequire } from 'module';
 
@@ -55,27 +56,77 @@ function compareSemver(a, b) {
   return 0;
 }
 
+async function syncSharedLib(sourceExtensionDir) {
+  const osAbstractionPath = join(projectRoot, 'lib', 'os-abstraction.cjs');
+  if (!existsSync(osAbstractionPath)) {
+    return;
+  }
+  const extLibDir = join(sourceExtensionDir, 'lib');
+  await mkdir(extLibDir, { recursive: true });
+  await copyFile(osAbstractionPath, join(extLibDir, 'os-abstraction.cjs'));
+}
+
+/** name из package.json → каталог исходника и версия. */
+async function readSourceExtensions() {
+  const sources = new Map();
+  if (!existsSync(sourceExtensionsDir)) {
+    return sources;
+  }
+  for (const entry of await readdir(sourceExtensionsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    const dir = join(sourceExtensionsDir, entry.name);
+    const packageJsonPath = join(dir, 'package.json');
+    if (!existsSync(packageJsonPath)) {
+      continue;
+    }
+    try {
+      const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
+      if (pkg.name && pkg.version) {
+        sources.set(String(pkg.name), { dir, version: String(pkg.version), entry: entry.name });
+      }
+    } catch {
+      // битый package.json — пропускаем, как и раньше
+    }
+  }
+  return sources;
+}
+
+/**
+ * Почему VSIX ставить нельзя, или пустая строка.
+ * Источник правды — .vscode/extensions/. Код расширения правят там, а VSIX
+ * пересобирают вручную: забытая пересборка при той же версии ставила старый код.
+ */
+async function vsixStaleReason(vsixPath, vsixVersion, source) {
+  const order = compareSemver(source.version, vsixVersion);
+  if (order > 0) {
+    return `исходники ${source.version} новее VSIX ${vsixVersion}`;
+  }
+  if (order < 0) {
+    return '';
+  }
+  await syncSharedLib(source.dir);
+  const drift = await vsixDriftFromSource(vsixPath, source.dir, tempRoot);
+  if (drift.length === 0) {
+    return '';
+  }
+  return `VSIX ${vsixVersion} собран не из текущих исходников той же версии (${drift.join(', ')})`;
+}
+
 async function installFromSourceDir(sourceExtensionDir, homeDir) {
   const packageJsonPath = join(sourceExtensionDir, 'package.json');
   if (!existsSync(packageJsonPath)) {
     return false;
   }
 
-  const packageJson = JSON.parse(await (await import('fs/promises')).readFile(packageJsonPath, 'utf-8'));
+  const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
   const { publisher, name, version } = packageJson;
   if (!publisher || !name || !version) {
     return false;
   }
 
-  const osAbstractionPath = join(projectRoot, 'lib', 'os-abstraction.cjs');
-  if (existsSync(osAbstractionPath)) {
-    const extLibDir = join(sourceExtensionDir, 'lib');
-    await mkdir(extLibDir, { recursive: true });
-    await (await import('fs/promises')).copyFile(
-      osAbstractionPath,
-      join(extLibDir, 'os-abstraction.cjs'),
-    );
-  }
+  await syncSharedLib(sourceExtensionDir);
 
   const extensionDirName = `${publisher}.${name}-${version}`;
   const extensionIdPrefix = `${publisher}.${name}-`;
@@ -236,9 +287,24 @@ async function installExtensions() {
 
     console.log(`[INFO] Найдено ${vsixFiles.length} расширений для установки:`);
 
+    const sources = await readSourceExtensions();
+    const vsixNames = new Set();
+    let staleVsix = 0;
+
     for (const file of vsixFiles) {
       const filePath = join(extensionsDir, file);
       const isUserConfig = file.includes('user-config');
+      const [, vsixName = '', vsixVersion = ''] = file.match(/^(.*)-(\d+\.\d+\.\d+)\.vsix$/i) || [];
+      vsixNames.add(vsixName);
+
+      const source = sources.get(vsixName);
+      const stale = source ? await vsixStaleReason(filePath, vsixVersion, source) : '';
+      if (stale) {
+        staleVsix += 1;
+        console.log(`\n-> [WARNING] ${file}: ${stale}. Ставлю из исходников: ${source.entry}`);
+        await installFromSourceDir(source.dir, homeDir);
+        continue;
+      }
 
       console.log(`\n-> Установка: ${file}`);
 
@@ -277,49 +343,17 @@ async function installExtensions() {
       }
     }
 
-    // Исходники новее VSIX или без VSIX — ставим из .vscode/extensions/
-    if (existsSync(sourceExtensionsDir)) {
-      const vsixByName = new Map();
-      for (const file of vsixFiles) {
-        const m = file.match(/^(.*)-(\d+\.\d+\.\d+)\.vsix$/i);
-        if (m) {
-          vsixByName.set(m[1], m[2]);
-        }
+    // Расширения без VSIX ставим из .vscode/extensions/.
+    for (const [name, source] of sources) {
+      if (vsixNames.has(name)) {
+        continue;
       }
-      const entries = await readdir(sourceExtensionsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) {
-          continue;
-        }
-        const sourceDir = join(sourceExtensionsDir, entry.name);
-        const packageJsonPath = join(sourceDir, 'package.json');
-        if (!existsSync(packageJsonPath)) {
-          continue;
-        }
-        let pkgName = '';
-        let pkgVer = '';
-        try {
-          const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-          pkgName = String(pkg.name || '');
-          pkgVer = String(pkg.version || '');
-        } catch {
-          continue;
-        }
-        if (!pkgName || !pkgVer) {
-          continue;
-        }
-        const vsixVer = vsixByName.get(pkgName);
-        if (!vsixVer) {
-          console.log(`\n-> VSIX для ${pkgName} нет — установка из исходников: ${entry.name}`);
-          await installFromSourceDir(sourceDir, homeDir);
-          continue;
-        }
-        if (compareSemver(pkgVer, vsixVer) > 0) {
-          console.log(
-            `[INFO] Исходники ${pkgName} ${pkgVer} новее VSIX ${vsixVer}. Ставим VSIX. Чтобы обновить пакет: ergoms update-vsix`,
-          );
-        }
-      }
+      console.log(`\n-> VSIX для ${name} нет — установка из исходников: ${source.entry}`);
+      await installFromSourceDir(source.dir, homeDir);
+    }
+
+    if (staleVsix > 0) {
+      console.log(`\n[WARNING] Устаревших VSIX: ${staleVsix}. Пересоберите пакеты: ergoms update-vsix`);
     }
 
     console.log('\n[OK] Установка расширений завершена.');

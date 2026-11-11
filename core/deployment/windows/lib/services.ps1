@@ -23,6 +23,17 @@ function Install-Service {
         return
     }
 
+    # Имена из host_lifecycle.yaml ставит ModuleHostServicesStep своей командой модуля.
+    if (-not $script:ErgoModuleHostUnitsByRoot) {
+        $script:ErgoModuleHostUnitsByRoot = @{}
+    }
+    if (-not $script:ErgoModuleHostUnitsByRoot.ContainsKey($Root)) {
+        $script:ErgoModuleHostUnitsByRoot[$Root] = @(Get-ModuleHostServiceUnits -ProjectRoot $Root)
+    }
+    if (@($script:ErgoModuleHostUnitsByRoot[$Root]) -contains $ServiceName) {
+        return
+    }
+
     # Check if service already exists
 
     $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
@@ -431,6 +442,17 @@ function Test-OsServiceInstalled {
 }
 
 
+function Invoke-SwarmLifecycle {
+    param(
+        [string]$ProjectRoot,
+        [string]$Action
+    )
+    $py = Join-Path $ProjectRoot 'virtual_env\python\Scripts\python.exe'
+    $script = Join-Path $ProjectRoot 'core\deployment\docker\swarm_lifecycle.py'
+    if (-not (Test-Path $py) -or -not (Test-Path $script)) { return }
+    & $py $script $Action
+}
+
 function Start-AllServices {
     param([string]$ProjectRoot)
 
@@ -524,6 +546,8 @@ function Start-AllServices {
         }
     }
 
+    Invoke-SwarmLifecycle -ProjectRoot $ProjectRoot -Action start
+
     Write-ErgomsMessage -Key 'svc_start_summary' -Color Green -Param @{
         started = $started
         already = $already
@@ -532,6 +556,19 @@ function Start-AllServices {
     }
 }
 
+
+function Invoke-CeleryRequeueUnacked {
+    param([string]$ProjectRoot)
+    $py = Join-Path $ProjectRoot 'virtual_env\python\Scripts\python.exe'
+    $script = Join-Path $ProjectRoot 'core\deployment\scripts\celery_requeue_unacked.py'
+    if ((Test-Path -LiteralPath $py) -and (Test-Path -LiteralPath $script)) {
+        try {
+            & $py $script --quiet
+        } catch {
+            Write-ErgomsMessage -Key 'celery_requeue_failed' -Color Yellow -Stderr
+        }
+    }
+}
 
 function Stop-AllServices {
     param([string]$ProjectRoot)
@@ -549,6 +586,8 @@ function Stop-AllServices {
         count = $planned.Count
         items = ($planned -join ', ')
     }
+
+    Invoke-SwarmLifecycle -ProjectRoot $ProjectRoot -Action stop
 
     $stopped = 0
     $skipped = 0
@@ -620,6 +659,8 @@ function Stop-AllServices {
             }
         }
     }
+
+    Invoke-CeleryRequeueUnacked -ProjectRoot $ProjectRoot
 
     if (Test-SearchEnabled -ProjectRoot $ProjectRoot) {
         if (Get-Command Stop-MeilisearchProcess -ErrorAction SilentlyContinue) {

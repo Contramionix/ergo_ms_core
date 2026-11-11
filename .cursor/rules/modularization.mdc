@@ -24,7 +24,7 @@ alwaysApply: false
 - Изолированный модуль (`isolated: true`) не ставит `ForeignKey` / `OneToOne` на чужой `app_label` и не на `AUTH_USER_MODEL`. Владелец пользователя — ядро; в модуле — `user_public_id`.
 - `Meta.db_table` **без** префикса схемы (иначе сломается SQLite).
 - Отдельная БД — поле `module:` в `databases.yaml`, не хардкод alias в ядре.
-- Worker модуля — `ergoms start-worker --module=<name>`: все очереди этого модуля (`modules.<name>.*`), не все очереди хоста.
+- Worker модуля — `ergoms start-worker --module=<name>`: очереди модуля, которые не отданы именованным воркерам из `celery_workers.yaml`. Один воркер — `--worker=<id>`.
 - Периодические задачи модуля — `ergoms start-beat --module=<name>` на хосте модуля. Общий Beat ядра в microservice **не** планирует `MICROSERVICE_MODULES`.
 
 ## Обязательно

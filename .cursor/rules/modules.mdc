@@ -21,8 +21,11 @@ globs:
   - "modules/*/host_lifecycle.yaml"
   - "modules/*/packages.yaml"
   - "modules/*/huggingface_models.yaml"
+  - "modules/*/runtime_requirements.yaml"
+  - "modules/*/model_providers.yaml"
   - "modules/*/vscode.tasks.yaml"
   - "modules/*/task_footprint.yaml"
+  - "modules/*/task_restart.yaml"
 alwaysApply: false
 ---
 # Модули
@@ -64,11 +67,16 @@ modules/<имя>/
 ├── ergoms.conf              # команды модуля (необязательно)
 ├── ergoms.help.yaml         # справка для ergoms help module (если есть ergoms.conf)
 ├── process_roles.yaml       # роли процессов для ergoms resource-usage (если есть свой демон)
+├── celery_workers.yaml      # именованные воркеры модуля: id, очереди, hostname (если видов несколько)
 ├── task_footprint.yaml      # footprint задач для ergoms celery-balance (если есть Celery)
+├── task_restart.yaml       # что делать с задачей после перезапуска воркера: hold / drop / requeue
 ├── host_lifecycle.yaml      # install/uninstall/stop демона в install-services и тестах (если есть служба/процесс)
 ├── packages.yaml            # portable-пакеты в virtual_env/packages (если модуль ставит бинарники)
 ├── huggingface_models.yaml  # снимки Hugging Face в virtual_env/trained_models/huggingface/
+├── runtime_requirements.yaml # инструменты, модели и Python-группы (версия 1)
+├── model_providers.yaml     # адаптер локального индекса моделей (если модуль — провайдер)
 ├── vscode.tasks.yaml        # задачи Run Task + include_in setup-full/start-all (необязательно)
+├── cursor_hooks.yaml        # команды на события Cursor, диспетчер ядра без имён модулей (необязательно)
 ├── integrations.yaml        # depends: requires (обязательные) / extends (опциональные)
 ```
 
@@ -80,7 +88,7 @@ modules/<имя>/
 |--------------|------|--------|
 | Django apps | `apps.py` | [`auto_config.py`](../../core/api/src/core/utils/auto_api/auto_config.py) |
 | Права ADP | `permission_catalog.py` | [`permission_catalog.py`](../../core/api/src/core/cms/adp/services/permission_catalog.py) |
-| Celery | `celery_config.py` | [`celery/manager.py`](../../core/api/src/core/utils/celery/manager.py) |
+| Celery | `celery_config.py`, `celery_workers.yaml` | [`celery/manager.py`](../../core/api/src/core/utils/celery/manager.py), [`module_queues.py`](../../core/api/src/core/utils/celery/module_queues.py) |
 | Клиент: routes / endpoints / integrations | `client/js/*` | [`ModuleLoader.js`](../../core/client/src/modules/core/ModuleLoader.js) |
 | Тема | `theme-defaults.js` | [`ThemeDefaultsManager.js`](../../core/client/src/modules/themes/ThemeDefaultsManager.js) |
 | i18n | `locales.js` | [`LocaleManager.js`](../../core/client/src/modules/i18n/LocaleManager.js) |
@@ -91,15 +99,18 @@ modules/<имя>/
 | Меню CMS | миграции меню + `menu.catalog` | [`restore_menu.py`](../../core/api/src/core/cms/management/commands/restore_menu.py) |
 | resource-usage | `process_roles.yaml` | [`process-roles.mdc`](process-roles.mdc) |
 | Celery balance | `task_footprint.yaml` | [`celery-balance.mdc`](celery-balance.mdc) |
+| Задачи после перезапуска | `task_restart.yaml` | [`celery-restart.mdc`](celery-restart.mdc) |
 | OS-службы | `host_lifecycle.yaml` | [`host-lifecycle.mdc`](host-lifecycle.mdc) |
 | Portable-пакеты | `packages.yaml` | [`packages.mdc`](packages.mdc) |
 | Снимки Hugging Face | `huggingface_models.yaml` | [`huggingface-models.mdc`](huggingface-models.mdc) |
+| Индекс моделей и runtime | `runtime_requirements.yaml`, `model_providers.yaml` | [runtime-models.md](../../.docs/runtime-models.md) |
 | Run Task / setup-full | `vscode.tasks.yaml` | [`module-vscode-tasks.mdc`](module-vscode-tasks.mdc) |
+| События Cursor | `cursor_hooks.yaml` | [`cursor_module_hooks.py`](../../core/deployment/scripts/cursor_module_hooks.py) |
 | Схема PostgreSQL | `api/schema.yaml` | [`modularization.mdc`](modularization.mdc) |
 | HTTP-мост | `api/bridge_manifest.yaml` | [`modularization.mdc`](modularization.mdc) |
 | Поиск | `search_indexes.py` | [`discovery.py`](../../core/api/src/core/search/discovery.py) |
 
-Правила агента Cursor для модуля — в `.cursor/rules/*.mdc` (globs `modules/<имя>/**`) и кратко в `AGENTS.md`. Подхват `.mdc` в Cursor: расширение **ERGO MS Module Cursor Rules** из [`.vscode/extensions/module-rules/`](../../.vscode/extensions/module-rules/) (`ergoms install-extensions`). Платформенные правила остаются в корневом `.cursor/rules/`. Подробности: [`module-cursor-rules.mdc`](module-cursor-rules.mdc), [`writing-docs-and-rules.mdc`](writing-docs-and-rules.mdc).
+Правила агента Cursor для модуля — в `.cursor/rules/*.mdc` (globs `modules/<имя>/**`) и кратко в `AGENTS.md`. Cursor читает вложенные правила сам, без копии плагина. Платформенные правила остаются в корневом `.cursor/rules/`. Подробности: [`module-cursor-rules.mdc`](module-cursor-rules.mdc).
 
 При правках модуля **обновляй его документацию** (`AGENTS.md`, `.mdc`, `README.md`, help) вместе с кодом — [`module-docs.mdc`](module-docs.mdc). Устойчивые пожелания из чата («должно быть так / не так») — в `BEHAVIOR.md` по [`module-behavior.mdc`](module-behavior.mdc). Это исключение из общего «не пиши docs без просьбы» в [`docs.mdc`](docs.mdc).
 
@@ -112,6 +123,8 @@ Portable-бинарники модуля (ollama, ffmpeg и т.п.) — толь
 Снимки Hugging Face (`org/name`) — только через `huggingface_models.yaml` и `ergoms pull-huggingface-models` ([`huggingface-models.mdc`](huggingface-models.mdc)); веса в `virtual_env/trained_models/huggingface/`, не в `ollama_models.yaml`, не в `~/.cache` и не в кэш модуля.
 
 Задачи VS Code / Cursor (Run Task) и участие в **Setup Full** / **Start All** — только через `vscode.tasks.yaml` (`include_in: setup-full` / `start-all`): hook модульности, не правка монолита ядра. Подробности — [`module-vscode-tasks.mdc`](module-vscode-tasks.mdc); формат shell-задач ядра — [`vscode-tasks.mdc`](vscode-tasks.mdc).
+
+Команды модуля на событие Cursor (`stop` и другие) объявляются в `cursor_hooks.yaml`. Диспетчер [`cursor_module_hooks.py`](../../core/deployment/scripts/cursor_module_hooks.py) обходит каталоги модулей, читает этот файл и запускает команду из каталога модуля. Имя модуля в ядре не пишется. Ответ команды с `followup_message` возвращается агенту.
 
 Вложенные подприложения (`client/<раздел>/js/routes.js`) подхватываются для маршрутов и `integrations.js`. Файлы `endpoints.js`, `permission-rules.js` — только из `client/js/` (или re-export оттуда).
 
@@ -280,6 +293,7 @@ def get_my_serializer_class():
 
 - Задачи: `api/tasks.py`
 - Конфиг: `api/celery_config.py`, маршрут `'modules.<имя>.api.tasks.*'`
+- Несколько воркеров: `celery_workers.yaml` в корне модуля. Запуск одного — `ergoms start-worker --module=<имя> --worker=<id>`
 - Footprint (опционально): `task_footprint.yaml` — [`celery-balance.mdc`](celery-balance.mdc)
 
 ## Git
@@ -319,6 +333,8 @@ def get_my_serializer_class():
 | Роли процессов (resource-usage) | [`process-roles.mdc`](process-roles.mdc) |
 | Host lifecycle (тесты deployment) | [`host-lifecycle.mdc`](host-lifecycle.mdc) |
 | Portable-пакеты (virtual_env/packages) | [`packages.mdc`](packages.mdc) |
+| Дата рождения и возраст пользователя | [`user-birth-date.mdc`](user-birth-date.mdc) |
+| Карточка человека без учётки (Person) | [`person.mdc`](person.mdc) |
 | Модульные задачи Run Task | [`module-vscode-tasks.mdc`](module-vscode-tasks.mdc) |
 | Формат задач ядра (tasks.json) | [`vscode-tasks.mdc`](vscode-tasks.mdc) |
 | Правила Cursor модуля | [`module-cursor-rules.mdc`](module-cursor-rules.mdc) |

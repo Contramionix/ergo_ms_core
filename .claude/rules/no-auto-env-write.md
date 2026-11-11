@@ -1,0 +1,89 @@
+---
+paths:
+  - "**/env.py"
+  - "**/*_runtime.py"
+  - "core/deployment/**/*env*"
+  - "**/.env.example"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Не записывать .env автоматически
+
+Файлы `.env`, `env/*.env` и модульные `modules/*/.env` редактирует **только человек**. Скрипты, установщики и код приложения **не** дописывают и **не** перезаписывают в них переменные окружения.
+
+## Кратко
+
+- Читать переменные — `from src.config.env import env` и модули `*_runtime.py` / `ergo_runtime.py`
+- Режимы — `ERGO_RUNTIME` / `ERGO_PROXY` / `ERGO_BROKER` / `ERGO_DB`; effective — `ergo_modes.py` / `*_runtime`
+- Deployment без Django — `env_file_loader.py`, `env_resolvers.py`, `resolve_env.py` (только чтение + effective-значения)
+
+## Обязательно
+
+- Новые настройки: ключ в `.env.example` или `env/*.example` + чтение через `env` / `*_runtime` с `default=`
+- Сценарии nginx / Redis / TLS: effective-логика в `nginx_runtime`, `redis_runtime`, `tls_runtime`, `ergo_modes` или `env_resolvers`
+- Install-скрипты подставляют effective-значения **в конфиг процесса**, не в `.env` / `env/*.env`
+
+## Запрещено
+
+```python
+# BAD — запись в .env из кода
+env_path.write_text(...)
+Path('.env').write_text(...)
+```
+
+```python
+# BAD — install-скрипт, который дописывает .env
+def sync_env_on_install(env_path: Path) -> None:
+    env_path.write_text(updated)
+```
+
+```powershell
+# BAD — дописать .env из ergoms
+Add-Content .env "ERGO_BROKER=redis"
+```
+
+**Допустимо:**
+
+- `ConfigScaffolder` создаёт `.env` и `env/*.env` **один раз** из `*.example`, если файла ещё нет (`setup-full`)
+- `ergoms env --reset-from-example` по **явной** команде заменяет рабочие `.env`, `databases.yaml` и `celery_workers.yaml` шаблонами. Уже заданные ключи, пароли и токены в `.env` не затираются. В `databases.yaml` любые непустые `user`/`password` возвращаются после копирования шаблона, в том числе шаблонные вроде `admin` и секции вне минимального набора. После записи `ensure_mode_secrets` заполняет только пустые поля, не подменяя уже заданные учётки. Требует подтверждения или `--yes`.
+- `ensure_mode_secrets` записывает **только пустые** криптоключи текущих режимов (`API_SECRET_KEY`, `API_JWT_SIGNING_KEY`, при необходимости `API_JUPYTER_TOKEN`, `MEDIA_API_INTERNAL_KEY`, `MEILI_MASTER_KEY`, `BRIDGE_INTERNAL_TOKEN`). Существующее значение не трогает; значение в лог не печатает. Не пароли SMTP/MCP и не ключи внешних API.
+- `ensure_infra_credentials` записывает в `databases.yaml` уникальные `user`/`password` для portable Postgres (`ERGO_DB=portable_postgres`) и Redis (`ERGO_BROKER=redis`), только если значение пустое или шаблонное **и** кластер Postgres ещё не создан / в `redis.conf` ещё нет `requirepass`. При `ERGO_BROKER=redis` дописывает отсутствующую секцию `redis`, не затирая остальные. Существующие учётные данные не трогает; значение в лог не печатает.
+
+## Базовый пример (runtime вместо автозаписи)
+
+```python
+# src/config/redis_runtime.py
+def effective_cache_backend() -> str:
+    explicit = env.str('API_CACHE_BACKEND', default='').strip().lower()
+    if explicit:
+        return explicit
+    if redis_enabled():
+        return 'redis'
+    return 'locmem'
+```
+
+```python
+# src/config/settings/cache.py
+from src.config.redis_runtime import effective_cache_backend, cache_redis_url
+
+CACHE_BACKEND = effective_cache_backend()
+```
+
+## Куда смотреть
+
+| Область | Файл |
+|---------|------|
+| Загрузка .env + env/ | [`env.py`](../../core/api/src/config/env.py), [`env_file_loader.py`](../../core/deployment/env_file_loader.py) |
+| Режимы ERGO_* | [`ergo_runtime.py`](../../core/api/src/config/ergo_runtime.py), [`ergo_modes.py`](../../core/deployment/ergo_modes.py) |
+| Nginx-сценарий | [`nginx_runtime.py`](../../core/api/src/config/nginx_runtime.py), [`env_resolvers.py`](../../core/deployment/env_resolvers.py) |
+| Redis-сценарий | [`redis_runtime.py`](../../core/api/src/config/redis_runtime.py), секция `redis` в `databases.yaml` |
+| TLS / Let's Encrypt | [`tls_runtime.py`](../../core/api/src/config/tls_runtime.py), [`tls_config.py`](../../core/deployment/nginx/tls_config.py) |
+| Клиент (Vite) | [`nginx-env.cjs`](../../core/deployment/nginx/nginx-env.cjs) |
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Конфиденциальные данные в .env | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| Первичная настройка | [`.docs/cli.md`](../../.docs/cli.md) |
+| Redis, nginx, TLS | [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc) |

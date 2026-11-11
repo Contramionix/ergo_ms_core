@@ -11,7 +11,13 @@ from typing import Any
 
 from project_layout import cache_celery_balance_dir, ensure_dir
 
-from celery_balance.constants import DEFAULT_HISTORY_MIN_SAMPLES, HISTORY_FILENAME
+from celery_balance.constants import (
+    DEFAULT_HISTORY_MIN_SAMPLES,
+    HISTORY_FILENAME,
+    HISTORY_MAX_BYTES,
+    HISTORY_MAX_SAMPLES_PER_QUEUE,
+    HISTORY_READ_MAX_BYTES,
+)
 
 
 @dataclass(frozen=True)
@@ -24,6 +30,46 @@ class HistoryStats:
 
 def history_path(project_root: Path) -> Path:
     return cache_celery_balance_dir(project_root) / HISTORY_FILENAME
+
+
+def trim_history_file(path: Path, *, max_bytes: int = HISTORY_MAX_BYTES) -> bool:
+    """Оставить хвост файла, если он больше max_bytes. True — файл урезан."""
+    if max_bytes < 1024:
+        max_bytes = 1024
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return False
+    if size <= max_bytes:
+        return False
+    keep = max(max_bytes // 2, 1024)
+    try:
+        with path.open('rb') as handle:
+            handle.seek(max(0, size - keep))
+            data = handle.read()
+    except OSError:
+        return False
+    if not data:
+        return False
+    # Первая строка после seek может быть обрезана.
+    if not data.startswith(b'{'):
+        newline = data.find(b'\n')
+        if newline < 0:
+            return False
+        data = data[newline + 1 :]
+    if not data:
+        return False
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    return True
 
 
 def append_sample(
@@ -48,16 +94,47 @@ def append_sample(
         record['peak_vram_mb'] = round(float(peak_vram_mb), 1)
     with path.open('a', encoding='utf-8') as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + '\n')
+    trim_history_file(path)
+
+
+def _read_tail_text(path: Path, *, max_bytes: int) -> str:
+    """Прочитать не больше max_bytes с конца файла (UTF-8)."""
+    if max_bytes < 1024:
+        max_bytes = 1024
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return ''
+    if size <= 0:
+        return ''
+    offset = max(0, size - max_bytes)
+    try:
+        with path.open('rb') as handle:
+            handle.seek(offset)
+            data = handle.read()
+    except OSError:
+        return ''
+    if not data:
+        return ''
+    text = data.decode('utf-8', errors='replace')
+    if offset > 0:
+        newline = text.find('\n')
+        if newline >= 0:
+            text = text[newline + 1 :]
+        else:
+            return ''
+    return text
 
 
 def _load_rows(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    rows: list[dict[str, Any]] = []
-    try:
-        text = path.read_text(encoding='utf-8')
-    except OSError:
+    # Подрезать на диске, если postrun раздул файл, пока CLI не вызывали.
+    trim_history_file(path)
+    text = _read_tail_text(path, max_bytes=HISTORY_READ_MAX_BYTES)
+    if not text:
         return []
+    rows: list[dict[str, Any]] = []
     for line in text.splitlines():
         line = line.strip()
         if not line:
@@ -86,6 +163,8 @@ def stats_by_queue(
 
     result: dict[str, HistoryStats] = {}
     for queue, items in buckets.items():
+        if len(items) > HISTORY_MAX_SAMPLES_PER_QUEUE:
+            items = items[-HISTORY_MAX_SAMPLES_PER_QUEUE:]
         ram_values = [
             float(item['peak_rss_mb'])
             for item in items

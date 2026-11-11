@@ -31,6 +31,8 @@ DEFAULT_PORT = 5432
 # Portable всегда на отдельном порту (не пересекается с типичным системным 5432).
 PORTABLE_DEFAULT_PORT = 5433
 DEFAULT_BIND = '127.0.0.1'
+_BIND_ADDR = re.compile(r'^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]+)$')
+_HBA_CIDR = re.compile(r'^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]+)/\d{1,3}$')
 DEFAULT_DB_NAME = 'ergo_ms'
 DEFAULT_DB_USER = 'postgres'
 DEFAULT_DB_PASSWORD = 'admin'
@@ -528,14 +530,36 @@ def _patch_conf_file(path: Path, replacements: dict[str, str]) -> None:
     path.write_text('\n'.join(out) + '\n', encoding='utf-8')
 
 
+def _env_list(root: Path, key: str, pattern: re.Pattern[str]) -> list[str]:
+    from env_file_loader import load_project_env
+
+    raw = str(load_project_env(root).get(key) or os.environ.get(key) or '').strip()
+    found: list[str] = []
+    invalid = False
+    for part in re.split(r'[\s,]+', raw):
+        if not part:
+            continue
+        if pattern.match(part) and part not in found:
+            found.append(part)
+        else:
+            invalid = True
+    if invalid and key == 'POSTGRES_HBA_EXTRA':
+        print(format_console('warning', t('postgres_hba_extra_ignored')))
+    return found
+
+
 def _configure_cluster(root: Path, port: int, bind: str) -> None:
     from log_env import log_basename, resolve_logs_dir
 
     data = postgres_data_dir(root)
     logs_dir = resolve_logs_dir(root)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    listen = [bind]
+    for extra in _env_list(root, 'POSTGRES_LISTEN_EXTRA', _BIND_ADDR):
+        if extra not in listen:
+            listen.append(extra)
     replacements = {
-        'listen_addresses': f"'{bind}'",
+        'listen_addresses': "'" + ','.join(listen) + "'",
         'port': str(port),
         'logging_collector': 'on',
         'log_directory': f"'{logs_dir.as_posix()}'",
@@ -552,7 +576,13 @@ def _configure_cluster(root: Path, port: int, bind: str) -> None:
         if '127.0.0.1/32' not in content:
             content += '\nhost all all 127.0.0.1/32 scram-sha-256\n'
             content += 'host all all ::1/128 scram-sha-256\n'
-            hba.write_text(content, encoding='utf-8')
+        for cidr in _env_list(root, 'POSTGRES_HBA_EXTRA', _HBA_CIDR):
+            line = f'host all all {cidr} scram-sha-256'
+            if line not in content:
+                if not content.endswith('\n'):
+                    content += '\n'
+                content += line + '\n'
+        hba.write_text(content, encoding='utf-8')
 
 
 def effective_portable_port(root: Path, port: int | None = None) -> int:

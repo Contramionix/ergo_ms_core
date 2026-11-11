@@ -1,0 +1,149 @@
+---
+paths:
+  - "core/client/src/components/LucideIcon.vue"
+  - "core/client/src/components/LucideMotionIcon.vue"
+  - "core/client/src/js/lucideIconLoader.js"
+  - "core/client/src/js/lucideMotionIconLoader.js"
+  - "core/client/src/js/lucideMotionIconGlob.js"
+  - "core/client/src/config/icons-mapping.js"
+  - "core/client/src/modules/icons/**"
+  - "core/client/src/integrations/appsMenu.js"
+  - "core/client/src/integrations/headerUserMenu.js"
+  - "**/appsMenu.js"
+  - "**/headerUserMenu.js"
+  - "**/menu/migration_utils.py"
+  - "**/*_menu*.py"
+  - "**/userSettingsTabs.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Иконки (Lucide)
+
+Динамические и декларативные иконки (меню, настройки, AppsMenu, UserMenu, уведомления, аудит) — **только через ядро**. Модули передают **строковое имя** Lucide; компонент импортируют и рендерят в ядре.
+
+## Кратко
+
+- Канонический формат имени — **Lucide PascalCase**: `CircleUserRound`, `Shield`, `MessageSquareText`, `Bot`
+- Общие смыслы ядра (профиль, колокольчик, настройки…) — константы **`CORE_ICON`** в [`coreIconNames.js`](../../core/client/src/config/coreIconNames.js); не подбирай «похожий» глиф (`User` вместо `CircleUserRound`)
+- Рендер в шаблоне — **`LucideIcon`** (`@/components/LucideIcon.vue`); обводка — `LUCIDE_STROKE_WIDTH` (не задавай свой `stroke-width` без причины)
+- SVG Lucide — квадрат: не ставь глобально `svg.lucide { display: block }` без фиксированной ширины. `display: block` растягивает глиф на 100% родителя (плоский колокол в пустом inbox, сплющенные иконки меню). Эталон: `inline-block` + `vertical-align: middle` + `aspect-ratio: 1` в `_globals.scss`; хост `LucideIcon` задаёт размер через `data-icon-size` и CSS, не через `:style` (CSP `style-src 'self'`).
+- Загрузка / preload — `lucideIconLoader.js` / `IconManager` (`normalizeLucideIconName`, `getLucideIconAsync`, `preloadLucideIconNames`)
+- Анимированный глиф по тому же имени — `lucideMotionIconLoader.js` / `LucideMotionIcon`. Меню и декларации остаются на `LucideIcon`. Barrel `@respeak/lucide-motion-vue` не импортировать
+- Миграции меню API — `icon='LayoutGrid'` (строка); клиент не превращает имя в Vue-компонент до рендера
+- Bridge (`apps.menu.items`, `header.userMenu.items`) — поле `icon: 'Bot'`, не `markRaw(Bot)`
+- Статический «хром» в том же файле (ChevronDown, X, GripVertical) — прямой `import` из `@lucide/vue` допустим
+- Пакет `lucide-vue-next` в workspace не ставится: Vite резолвит его в `@lucide/vue`. Новый код — только `@lucide/vue`
+
+## Обязательно
+
+| Нужно | Как |
+|----|-----|
+| Иконка пункта меню / settings / apps / header | строка PascalCase + `<LucideIcon :name="…" />` в ядре |
+| Общий смысл (профиль, уведомления, настройки) | `CORE_ICON.profile` / `.notifications` / … из `coreIconNames.js` |
+| Иконка из модуля (bridge) | `icon: 'Building2'` — без import lucide в модуле |
+| Иконка уведомления / audit | строка в данных; UI ядра рендерит через `LucideIcon` |
+| Preload набора имён | `preloadLucideIconNames(['Home', 'Settings'])` |
+| Анимированная иконка по имени | `<LucideMotionIcon name="Heart" animate-on-hover />` или `getLucideMotionIconAsync('Heart')` |
+| Preload анимированных имён | `preloadLucideMotionIconNames(['Heart', 'Settings'])` |
+| Нестандартный ввод (`user-round`, `lucide:Bell`) | ядро нормализует через `normalizeLucideIconName` |
+
+## Запрещено
+
+```js
+// BAD — модуль тянет компонент Lucide в декларацию
+import { Bot } from '@lucide/vue'
+bridge.provideMany(APPS_MENU_ITEMS_GROUP, 'my_app', {
+  icon: markRaw(Bot),
+})
+
+// BAD — settings / меню хранят Vue-компонент вместо имени
+{ id: 'profile', icon: User }
+
+// BAD — другой глиф для того же смысла, что в сайдбаре («Личный кабинет» = CircleUserRound)
+{ id: 'profile', icon: 'User' }
+
+// BAD — свой резолвер иконок в модуле
+import { icons } from './my-icon-map.js'
+
+// BAD — namespace import тянет все глифы (~1800 HTTP-запросов)
+import * as Lucide from '@lucide/vue'
+
+// BAD — barrel анимированных иконок
+import { Heart } from '@respeak/lucide-motion-vue'
+```
+
+```js
+// GOOD — модуль только имя
+bridge.provideMany(APPS_MENU_ITEMS_GROUP, 'my_app', {
+  icon: 'Bot',
+})
+
+// GOOD — ядро рендерит
+import LucideIcon from '@/components/LucideIcon.vue'
+// <LucideIcon :name="item.icon" :size="18" />
+```
+
+```python
+# GOOD — миграция меню
+helper.create_group('Мой модуль', 'MyModuleHome', icon='LayoutGrid')
+```
+
+## Базовый пример (модуль)
+
+```js
+// modules/<name>/client/js/appsMenu.js
+bridge.provideMany(APPS_MENU_ITEMS_GROUP, '<name>_app', {
+  id: '<name>_app',
+  order: 10,
+  title: '…',
+  icon: 'LayoutGrid',
+  route: { name: 'MyModuleHome' },
+})
+```
+
+```js
+// modules/<name>/client/js/headerUserMenu.js
+bridge.provideMany(HEADER_USER_MENU_ITEMS_GROUP, '<name>', {
+  id: '<name>',
+  order: 20,
+  title: '…',
+  icon: 'Building2',
+  link: { name: 'MyModuleHome' },
+  trailingAction: {
+    icon: 'LogOut',
+    title: '…',
+    onClick: leaveSession,
+  },
+})
+```
+
+## Эталоны в ядре
+
+| Тема | Путь |
+|---|---|
+| Рендер | [`LucideIcon.vue`](../../core/client/src/components/LucideIcon.vue) |
+| Анимированный рендер | [`LucideMotionIcon.vue`](../../core/client/src/components/LucideMotionIcon.vue) |
+| Семантические имена ядра | [`coreIconNames.js`](../../core/client/src/config/coreIconNames.js) |
+| Loader + normalize | [`lucideIconLoader.js`](../../core/client/src/js/lucideIconLoader.js) |
+| Анимированный loader | [`lucideMotionIconLoader.js`](../../core/client/src/js/lucideMotionIconLoader.js) |
+| IconManager | [`IconManager.js`](../../core/client/src/modules/icons/IconManager.js) |
+| Меню (preload) | [`icons-mapping.js`](../../core/client/src/config/icons-mapping.js) |
+| Settings tabs | [`userSettingsTabs.js`](../../core/client/src/core/cms/adp/user/account/component/userSettingsTabs.js) |
+| AppsMenu / UserMenu | [`appsMenu.js`](../../core/client/src/integrations/appsMenu.js), [`headerUserMenu.js`](../../core/client/src/integrations/headerUserMenu.js) |
+| Карта имён (codegen) | `scripts/generate-lucide-icon-map.js` → `lucideIconFiles.generated.js` |
+
+## Исключения
+
+- **Статический хром** рядом с разметкой (стрелки, закрытие, grip) — `import { ChevronDown } from '@lucide/vue'`
+- **Bootstrap Icons** на legacy auth-страницах (`bi bi-*`) — не расширять; новый UI только Lucide
+- Не подключай полный barrel `import('@lucide/vue')` или `import('@respeak/lucide-motion-vue')` ради динамического списка — см. [`client-perf.mdc`](../../.cursor/rules/client-perf.mdc)
+- Анимированный набор меньше статического. Нет файла — `getLucideMotionIconAsync` возвращает `null`, `LucideMotionIcon` показывает `LucideIcon`. При `data-ergo-motion='reduce'` анимированный чанк не грузится
+
+## Связанные правила
+
+| Тема | Файл |
+|---|---|
+| Боковое меню | [`menu.mdc`](../../.cursor/rules/menu.mdc) |
+| Модули, bridge | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Компоненты ядра | [`components.mdc`](../../.cursor/rules/components.mdc) |
+| Производительность (per-icon load) | [`client-perf.mdc`](../../.cursor/rules/client-perf.mdc) |

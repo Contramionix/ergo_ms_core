@@ -6,8 +6,8 @@ alwaysApply: false
 
 ## Запуск
 
-- Worker: `ergoms start-worker` (или `--worker=<имя>`)
-- Worker модуля при `MODULE_RUNTIME=microservice`: `ergoms start-worker --module=<name>` — все очереди этого модуля (`modules.<name>.*`), не все очереди хоста; см. [`modularization.mdc`](modularization.mdc)
+- Worker: `ergoms start-worker` (или `--worker=<имя>` из корневого `celery_workers.yaml`)
+- Worker модуля: `ergoms start-worker --module=<name>` — общий процесс на очереди, которые модуль не отдал именованным воркерам, и отдельный процесс на каждый id из `modules/<name>/celery_workers.yaml`. Один воркер: `--module=<name> --worker=<id>`. Остановка одного: `ergoms stop-worker --module=<name> --worker=<id>`. Без `--worker` у `stop-worker` останавливаются воркеры этого модуля, не весь хост. См. [`modularization.mdc`](modularization.mdc)
 - Планировщик ядра: `ergoms start-beat` (на хосте ядра; в microservice не ставит задачи `MICROSERVICE_MODULES`)
 - Планировщик модуля: `ergoms start-beat --module=<name>` и OS-служба `--kind=beat`, если есть `api/**/celery_beat_config.py`
 - Остановка: `ergoms stop-worker`, `ergoms stop-beat`
@@ -30,8 +30,11 @@ Worker и Beat должны смотреть на **один** брокер. И�
 
 - `modules/<имя>/api/tasks.py` — задачи с `@shared_task`
 - `modules/<имя>/api/celery_config.py` — очереди и маршруты
-- `modules/<имя>/task_footprint.yaml` — ожидаемый footprint задач для `ergoms celery-balance` (опционально)
+- `modules/<имя>/celery_workers.yaml` — именованные воркеры (id, hostname, очереди, concurrency, `pool`). Старый `dedicated_queues.yaml` читается так же: `name` там и очередь, и id. Очереди из обоих файлов общий worker и `queues: all` не слушают. Служба `--kind=worker` ставит общий unit и по одному на каждый id; перезапуск unit не гасит соседей.
+- `max_tasks_per_child` и `max_memory_per_child` в `celery_workers.yaml` (корень или модуль) попадают в команду worker только при `pool: prefork`. `max_memory_per_child` — килобайты, как у Celery. При `threads` ключи не передаются: потоки не перезапускают процесс.
+- `modules/<имя>/task_footprint.yaml` — ожидаемый footprint задач для `ergoms celery-balance` (опционально). При включённом кластере процессорные очереди `medium` и `heavy` уходят на рабочие узлы сами; файл нужен, чтобы оставить очередь на основном сервере (`placement: primary`) или задать память и потолок.
 - `modules/<имя>/api/celery_beat_config.py` — расписание (если нужно)
+- `modules/<имя>/task_restart.yaml` — что делать с задачей, которую оборвал перезапуск воркера или `ergoms`: `hold` (ждать `ergoms celery-parked --resume`), `drop`, `requeue`. Без файла — `hold`. Подробно — [`celery-restart.mdc`](celery-restart.mdc)
 
 Пример маршрута:
 
@@ -71,6 +74,7 @@ ergoms logs celery-beat notifications 200
 | Балансировщик concurrency | [`celery-balance.mdc`](celery-balance.mdc) |
 | Вынос модуля в сервис | [`modularization.mdc`](modularization.mdc) |
 | Долгий расчёт, пауза, --resume | [`long-running-jobs.mdc`](long-running-jobs.mdc) |
+| Задачи после перезапуска | [`celery-restart.mdc`](celery-restart.mdc) |
 
 ## Не делай
 

@@ -72,7 +72,9 @@ class DockerApiShellTests(unittest.TestCase):
     def test_install_shell_does_not_use_poetry_run(self) -> None:
         shell = api_install_shell()
         self.assertIn('PYTHONPATH=/app/core/api:/app', shell)
-        self.assertIn('/usr/local/bin/python -m commands install', shell)
+        self.assertIn('API_PYTHON=/usr/local/bin/python', shell)
+        self.assertIn('"$candidate" -c "import django"', shell)
+        self.assertIn('"$API_PYTHON" -m commands install', shell)
         self.assertNotIn('poetry run', shell)
 
 

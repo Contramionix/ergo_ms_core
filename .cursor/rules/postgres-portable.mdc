@@ -32,7 +32,7 @@ alwaysApply: false
 - Windows: служба идёт от `NetworkService` (postgres не стартует как LocalSystem). `icacls` выдаёт Modify на `packages/postgres`, `packages/nssm` и корневой `logs/` — SCM запускает `nssm.exe`, а `log_directory` в conf указывает в `logs/`
 - Маркер `virtual_env/packages/postgres/PORT` после install
 - Скрипты **не** пишут host/port / `POSTGRES_*` в `.env` / yaml ([`no-auto-env-write.mdc`](no-auto-env-write.mdc))
-- Установленный portable входит в `ergoms start` / `start-all-services` (`Get-ServiceNames` / `generate_units_list`)
+- Установленный portable входит в `ergoms start` (`Get-ServiceNames` / `generate_units_list`)
 - После смены knobs в `env/postgres.env` — `ergoms install-postgres` (перезапишет `postgresql.conf`)
 
 ## Конфиги: что где

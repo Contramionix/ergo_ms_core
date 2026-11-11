@@ -1,0 +1,24 @@
+---
+description: UI ядра — Multi-select выбор пользователей — MemberPickerModal
+alwaysApply: false
+---
+
+## Multi-select выбор пользователей — MemberPickerModal
+
+Компонент ядра: `@/components/MemberPickerModal.vue` — **только UI** (поиск, вкладки, multi-select, `UserAvatar`).
+
+### Обязательно
+
+- Загрузка списка — через prop **`fetchUsers({ q, search, activeTab, roleGroupId })`**, не через API модулей в ядре. `q` и `search` — одна и та же строка поиска.
+- Ключ выбора — opaque `public_id` / `user_ref`. `assignedUserIds` и `excludedUserIds` — те же ссылки, не числовой pk.
+- В модуле с доменной логикой — обёртка с `fetchUsers` (эталон: `modules/<name>/client/components/…MemberPickerModal.vue`).
+- Используй `ModalCenter` + `SearchInput` — не делай свой picker с нуля.
+
+**Не путать** с формой добавления участника в домене модуля (`modules/<name>/client/components/AddMemberModal.vue` и аналоги) — роль, подразделение/scope, один пользователь.
+
+### Запрещено
+
+- Прямые вызовы API модулей (`/<name>/...`, `endpoints.<name>.*`) внутри `MemberPickerModal`.
+- Импорт `@/components/MemberPickerModal` из модуля с domain props (`scopeId`, `mode`) — только через модульную обёртку.
+
+Эталон использования с доменом: страница модуля → модульная обёртка `*MemberPickerModal`.

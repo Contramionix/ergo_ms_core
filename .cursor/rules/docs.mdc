@@ -5,36 +5,8 @@ alwaysApply: true
 
 # Документирование в репозитории
 
-## Когда создавать
+Новые README, INSTALL, CHANGELOG, схемы и docstring к понятному коду пиши только по просьбе.
 
-**Только по явной просьбе пользователя.**
+Без отдельной просьбы можно править уже существующий документ, короткий README в `core/api/`, `core/client/`, `core/media_api/`, документацию модуля при правке `modules/<name>/` (`AGENTS.md`, `.mdc`, `README.md`, `ergoms.help.yaml` — [`module-docs.mdc`](module-docs.mdc)) и норму в `BEHAVIOR.md` ([`module-behavior.mdc`](module-behavior.mdc)).
 
-Не генерируй без запроса:
-- README, INSTALL, CHANGELOG и прочие markdown-файлы;
-- схемы архитектуры, диаграммы «по коду»;
-- комментарии-docstring ради документирования уже понятного кода.
-
-**Исключения (делать без отдельной просьбы):**
-
-- правки **существующей** документации;
-- краткие README в `core/api/`, `core/client/`, `core/media_api/` (точки входа со ссылками на `.docs/`);
-- **документация модуля** при правках в `modules/<name>/` — `AGENTS.md`, `.cursor/rules/*.mdc`, `README.md`, `ergoms.help.yaml` по чеклисту [`module-docs.mdc`](module-docs.mdc);
-- **`BEHAVIOR.md` модуля** — устойчивые пожелания из чата («должно быть так / не так») по [`module-behavior.mdc`](module-behavior.mdc), без отдельной просьбы «создай документ».
-
-## Где что лежит
-
-| Аудитория | Каталог |
-|-----------|---------|
-| Люди | [`.docs/`](../../.docs/) — оглавление в [README.md](../../README.md#документация) |
-| Агент Cursor | [`.cursor/rules/`](.) — см. [`writing-docs-and-rules.mdc`](writing-docs-and-rules.mdc) |
-| Модуль (агент + люди) | `modules/<name>/AGENTS.md`, `BEHAVIOR.md`, `.cursor/rules/`, `README.md` — [`module-docs.mdc`](module-docs.mdc) |
-| Generate commit message (✨) | [`.cursorrules`](../../.cursorrules) в корне — формулировка на русском; не путать с `.mdc` |
-| Куда класть коммит | [`git-commits.mdc`](git-commits.mdc) — git root файла, не указатель submodule в обёртке |
-| Развёртывание | [`core/deployment/logic.md`](../../core/deployment/logic.md) |
-| Сообщество GitHub (организация) | [`core/.github/`](../../core/.github/) — submodule; синхронизация с `.docs/` — [`github-org-community.mdc`](github-org-community.mdc) |
-
-При правке онбординга, безопасности или поддержки в `.docs/` / README — проверь, не устарели ли краткие тексты в `core/.github` (см. [`github-org-community.mdc`](github-org-community.mdc)).
-
-## Как писать
-
-Стиль, структура, язык, примеры — в [`writing-docs-and-rules.mdc`](writing-docs-and-rules.mdc). Документация модулей — [`module-docs.mdc`](module-docs.mdc).
+Людям — [`.docs/`](../../.docs/). Агенту — `.cursor/rules/`. Коммит — [`.cursorrules`](../../.cursorrules) и [`git-commits.mdc`](git-commits.mdc). Стиль — [`writing-docs-and-rules.mdc`](writing-docs-and-rules.mdc) и [`docs-prose.mdc`](docs-prose.mdc). При правке онбординга или безопасности сверь [`core/.github`](../../core/.github/).

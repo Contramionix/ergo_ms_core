@@ -28,6 +28,8 @@ class PlatformArchive:
     pick_match: str | None = None
     pick_as: str | None = None
     strip_top_dir: bool = False
+    mirrors: tuple[str, ...] = ()
+    sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,8 +50,12 @@ class PackageSpec:
     marker_linux: str | None = None
     extra_dirs: tuple[str, ...] = ()
     always_run: bool = False
+    swarm_worker: bool = False
     platforms: dict[str, PlatformArchive] = field(default_factory=dict)
+    supported_platforms: tuple[str, ...] = ()
+    required_files: dict[str, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+    minimum_sizes: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

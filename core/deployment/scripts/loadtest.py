@@ -710,6 +710,14 @@ def main(argv: list[str] | None = None) -> int:
 
     root = resolve_root(args.root)
 
+    from project_isolation import IsolationError, validate_project
+
+    try:
+        validate_project(root)
+    except IsolationError as exc:
+        print(format_console('error', str(exc)), file=sys.stderr)
+        return 1
+
     if args.cleanup_users:
         print(format_console('info', t('loadtest_cleanup_all_users')))
         try:

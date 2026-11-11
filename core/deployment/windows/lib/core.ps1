@@ -172,6 +172,16 @@ function Write-ErgomsMessage {
 
 
 
+    # Permission errors must remain understandable before Python/CLI locales exist.
+    if ($Key -eq 'admin_required') {
+        $message = Format-ErgoConsole -Level error -Message "Command '$($Param.name)' requires administrator privileges"
+        Write-ColorOutput $message $Color
+        return
+    }
+    if ($Key -eq 'admin_powershell_hint') {
+        Write-ColorOutput 'Run PowerShell as Administrator' $Color
+        return
+    }
     Write-ColorOutput "[$Key]" $Color
 
 }

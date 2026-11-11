@@ -1,0 +1,144 @@
+---
+paths:
+  - "**/migrations/*.py"
+  - "**/models.py"
+  - "**/models/**/*.py"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Django-миграции — без расхождений с моделью
+
+Правило для `makemigrations` / `migrate` в `core/api` и `modules/*/api`. Команды — только через ergoms ([`no-direct-manage-py.mdc`](../../.cursor/rules/no-direct-manage-py.mdc)).
+
+## Кратко
+
+- Индекс в модели и в миграции — одно и то же явное `name=`: слова о полях, не хеш Django.
+- Имя индекса — до 30 символов, латиница, `snake_case`. Без `name=` следующий прогон предложит `RenameIndex` на новый хеш.
+- Один номер миграции — один файл; не создавай второй `0025_*`, если уже есть `0025_*`.
+- После правок: `ergoms api makemigrations --dry-run` **дважды подряд** → оба раза `No changes detected`.
+- На **локальном** этапе не раздувай цепочку: соседние schema-файлы сжимай в один до push (см. ниже).
+- Если миграция уже уехала с машины (push / общая ветка / чужая БД) — не переписывай, только следующий номер.
+
+## Обязательно
+
+### Индексы в `Meta.indexes`
+
+Если в модели есть `models.Index(...)`, задай **`name=`** до `makemigrations`. Тот же строковый литерал — в `AddIndex`, `CreateModel` или `RenameIndex`.
+
+Имя читается как слова: латиница, `snake_case`, смысл полей. Потолок Django — 30 символов (`Index.max_name_length`). Суффикс `_idx` и префикс приложения не обязательны. Примеры: `message_room_created`, `theme_module_active`.
+
+Порядок для нового индекса:
+
+1. В модели сразу `Index(..., name='message_room_created')`.
+2. `ergoms api makemigrations <app>` — в файл попадает это имя.
+3. `ergoms api makemigrations <app> --dry-run` — `No changes detected`.
+
+Хеш уже в локальном файле, миграция ещё не применена и не уехала с машины: замени имя в модели и в этом файле на одно читаемое. Отдельную миграцию не добавляй.
+
+Хеш уже в применённой или уехавшей миграции: старый файл не переписывай. Читаемое имя — в модели и в следующем `RenameIndex`.
+
+### Нумерация и цепочка
+
+- Следующий файл: `NNNN_<краткое_имя>.py`, где `NNNN` — на 1 больше последней миграции приложения.
+- `dependencies` — на реально существующую миграцию; не дублируй номер (конфликт `0025_theme_module_pair` + `0025_rename_...`).
+- Data-миграции (`RunPython`, seed) — **после** schema-миграций, от которых зависят поля.
+
+### Локальное сжатие schema-миграций
+
+Цель: пока изменения ещё только на этой машине, **не плодить лишние номера** — несколько подряд schema-шагов по моделям сводить в один файл (откат → слияние → снова migrate). Это не исторический `ergoms sq-del-migrations` и не про заполнение данных.
+
+**Рекомендуй сжатие, когда все условия сразу:**
+
+- файлы ещё локальные (uncommitted или commits не в remote общей ветки);
+- операции только schema по моделям: `CreateModel`, `AddField`, `AlterField`, `RemoveField`, индексы, `Rename*` и т.п.;
+- в рамках одной задачи / одного `app_label` накопилось 2+ соседних локальных schema-файла — сжать до одного (или минимума разумных шагов) **до** коммита/push.
+
+**Не сливай и не переписывай:**
+
+- есть `RunPython` / `RunSQL` / seed / backfill / заполнение (меню, каталоги и т.п.);
+- миграция уже у других или на общем стенде;
+- сомнение «локально ли» → добавляй следующий номер.
+
+**Процедура (только ergoms):**
+
+```text
+1. ergoms api migrate <app_label> <предыдущая>
+2. Слить операции в один NNNN_*.py, удалить лишние локальные файлы
+3. dependencies — на родителя (+ swappable AUTH при CreateModel с FK на User)
+4. ergoms api migrate <app_label>
+5. ergoms api makemigrations --dry-run (×2) → No changes detected
+```
+
+```text
+# GOOD — два локальных schema-шага → один файл до push
+# 0005_inbox_restored_at.py + 0006_user_settings.py
+# → 0005_inbox_restored_at_and_user_settings.py
+
+# BAD — оставить пачку мелких локальных schema «на потом»
+# BAD — откат/rewrite миграции с RunPython или уже запушенной
+```
+
+### Метаданные полей
+
+`help_text`, `verbose_name`, `choices`, `default` в **новой** `AddField` / `AlterField` должны совпадать с моделью. Иначе autodetector снова предложит `AlterField` только ради текста.
+
+### Проверка перед завершением задачи
+
+```powershell
+ergoms api makemigrations --dry-run
+ergoms api makemigrations --dry-run
+```
+
+Если второй запуск что-то генерирует — исправь модель или миграцию, не коммить «полуфабрикат».
+
+## Запрещено
+
+```python
+# BAD — автоимя Django: обрезка таблицы и хеш
+models.Index(
+    fields=['content_type', 'object_id', 'created_at'],
+    name='app_m_content_7d3c1a_idx',
+)
+
+# BAD — без name следующий makemigrations предложит RenameIndex на новый хеш
+indexes = [models.Index(fields=['status', 'created_at'])]
+
+# BAD — выдуманный хеш вместо слов
+models.Index(fields=['module_key', 'is_active'], name='theme_mod_a1b2c3_idx')
+
+# BAD — второй файл с тем же номером
+# 0025_foo.py уже есть → не создавай 0025_bar.py, только 0026_bar.py
+
+# BAD — править миграцию, которая уже у других / в remote / на общем стенде
+# (ломает согласованность; локальный schema-only merge — см. секцию выше)
+```
+
+```python
+# GOOD — одно читаемое имя в модели и в миграции
+indexes = [
+    models.Index(
+        fields=['module_key', 'is_active'],
+        name='theme_module_active',
+    ),
+]
+```
+
+## Уже применённые миграции с ошибочными именами
+
+Не перегенерируй бесконечные `RenameIndex`. Схема:
+
+1. В **модели** и в **исходной** schema-миграции (если ещё не в prod) — канонические имена.
+2. Отдельная миграция с **условным** переименованием в БД для старых установок.
+3. Хеш в имени — повод дать читаемое имя при правке этого индекса, не повод переименовывать старые индексы пачкой.
+
+Эталон: [`0026_align_theme_legacy_index_names.py`](../../core/api/src/core/settings/migrations/0026_align_theme_legacy_index_names.py) — проверка `pg_indexes`, переименование только если старое имя есть и нового ещё нет.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| ORM, ergoms migrate | [`database.mdc`](../../.cursor/rules/database.mdc) |
+| Django, User, apps | [`django.mdc`](../../.cursor/rules/django.mdc) |
+| Модули, `api/migrations/` | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Submodule — куда коммитить | [`git-commits.mdc`](../../.cursor/rules/git-commits.mdc), [`gitignore.mdc`](../../.cursor/rules/gitignore.mdc) |
+| Исторический squash shared-цепочки | `ergoms sq-del-migrations` ([`commands.conf`](../../core/deployment/commands.conf)) — не путать с локальным сжатием выше |

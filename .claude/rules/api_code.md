@@ -1,0 +1,90 @@
+---
+paths:
+  - "core/api/**/*.py"
+  - "modules/*/api/**/*.py"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Сервер (API)
+
+## Кратко
+
+- Новый эндпоинт — **базовый класс ядра**, не сырой DRF и не ручная сборка миксинов.
+- ViewSet с данными пользователя — `BaseModelViewSet` (или `restrict_queryset` / фильтр в `get_queryset`).
+- Поиск людей — только `user_search` ([`user_search.mdc`](../../.cursor/rules/user_search.mdc)).
+- Пути к ресурсам — из `core/api/src/config/settings/base.py`.
+- Команды в ответах пользователю — только `ergoms` ([`no-direct-manage-py.mdc`](../../.cursor/rules/no-direct-manage-py.mdc)).
+
+## Какой базовый класс
+
+Импорт: `from src.core.utils.base import …` (или `…base_views` / `…base_viewsets`).
+
+| Задача | Класс |
+|--------|--------|
+| Один метод (`get`/`post`) | `BaseAPIView` |
+| Только глобальный админ | `BaseAPIViewGlobalAdminMixin` / `BaseModelViewSetGlobalAdmin` |
+| Публичный (login, health ядра) | `BaseAPIViewPublicMixin` + строка в `core_anonymous_allowlist.yaml` |
+| CRUD модели | `BaseModelViewSet` |
+| Только чтение | `BaseReadOnlyModelViewSet` |
+| Набор `@action` без модели | `BaseViewSet` |
+| GenericViewSet без `public_id` | `AuthenticatedAPIMixin` + свой lookup |
+
+`BaseModelViewSet` уже даёт: `IsAuthenticated`, throttle, `SwaggerSafeMixin`, пустой queryset для Swagger/гостей, lookup по `public_id`. Права модуля — в `permission_classes`. Аудит CRUD — `AuditedModelMixin` перед базой. Файлы — `MediaApiFileMixin`. Поле модели — `PublicIdMixin`.
+
+Гостевой доступ на ViewSet **не** делай «молча»: как у APIView, только явный публичный миксин и allowlist.
+
+## ViewSet и Swagger
+
+```python
+# GOOD — базовый класс; super() уже закрыл гостей и Swagger
+from src.core.utils.base import BaseModelViewSet, PublicIdMixin
+from src.core.audit.mixin import AuditedModelMixin
+
+class Item(PublicIdMixin, models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    ...
+    # В изолированном модуле (`api/schema.yaml` isolated: true) FK на AUTH_USER_MODEL
+    # запрещён — владелец: user_public_id. См. modularization.mdc
+
+class ItemViewSet(AuditedModelMixin, BaseModelViewSet):
+    queryset = Item.objects.all()
+    serializer_class = ItemSerializer
+    permission_classes = [IsAuthenticated, CanViewMyModule]
+    owner_field = 'owner'  # опционально: qs.filter(owner=user)
+
+    def get_queryset(self):
+        return super().get_queryset().order_by('name')
+```
+
+```python
+# BAD — сырой ModelViewSet, полный queryset, pk в URL
+class MyViewSet(viewsets.ModelViewSet):
+    queryset = MyModel.objects.all()
+```
+
+```python
+# BAD — собирать миксины вручную на новом коде
+class MyViewSet(SwaggerSafeMixin, viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'public_id'
+```
+
+Без `owner_field` **обязан** отфильтровать выборку в `get_queryset` (владелец, scope, права). `super()` только отсекает гостей и Swagger.
+
+Эталон: `modules/module_template/api/views.py`. Миксины: `core/api/src/core/utils/mixins.py`. Подробнее — [`code.mdc`](../../.cursor/rules/code.mdc) → «Сериализаторы и Swagger».
+
+В `SerializerMethodField` user — через `SwaggerSafeSerializerMixin.get_safe_user()`, не `request.user` без проверки на None.
+
+## Поиск пользователей
+
+Не пиши свои `Q(first_name__icontains=...)` — только функции из [`user_search.mdc`](../../.cursor/rules/user_search.mdc).
+
+## Связанные правила
+
+| Тема | Правило |
+|------|---------|
+| Безопасность, public_id | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| База данных, ORM | [`database.mdc`](../../.cursor/rules/database.mdc) |
+| Django, расширение User | [`django.mdc`](../../.cursor/rules/django.mdc) |
+| Аудит CRUD | [`audit.mdc`](../../.cursor/rules/audit.mdc) |
+| Изолированный модуль, FK | [`modularization.mdc`](../../.cursor/rules/modularization.mdc) |

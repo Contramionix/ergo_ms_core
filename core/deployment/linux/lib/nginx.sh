@@ -191,6 +191,12 @@ _nginx_write_main_conf() {
   fi
   temp_dir="$nginx_dir/temp"
   include_path="$site_conf"
+  gzip_static_line=""
+  nginx_bin="$(_nginx_binary "$root")"
+  # Модуль есть не в каждой сборке; без него директива роняет nginx -t.
+  if [[ -x "$nginx_bin" ]] && "$nginx_bin" -V 2>&1 | grep -q 'http_gzip_static_module'; then
+    gzip_static_line="    gzip_static on;"
+  fi
 
   mkdir -p "$nginx_dir/conf" "$runtime_logs_dir" "$temp_dir" "$central_logs_dir"
   mkdir -p "$temp_dir/proxy" "$temp_dir/client_body" "$temp_dir/fastcgi" "$temp_dir/uwsgi" "$temp_dir/scgi"
@@ -213,6 +219,12 @@ http {
     $access_log_line
 
     sendfile        on;
+    tcp_nopush      on;
+    open_file_cache max=10000 inactive=20s;
+    open_file_cache_valid 30s;
+    open_file_cache_min_uses 2;
+    open_file_cache_errors on;
+$gzip_static_line
     keepalive_timeout 65;
 
     client_body_temp_path $temp_dir/client_body;

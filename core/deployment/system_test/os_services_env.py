@@ -26,10 +26,11 @@ class OsServicesEnvironment(HostWorktreeEnvironment):
         wait_http(self.client_base(), timeout_sec=120.0, path='/')
 
     def teardown(self) -> None:
-        try:
-            self.run_ergoms('uninstall-services', timeout=1800)
-        except Exception:
-            pass
+        if self._configured and self.tree_root.is_dir():
+            try:
+                self.run_ergoms('uninstall-services', timeout=1800)
+            except Exception:
+                pass
         super().teardown()
 
 

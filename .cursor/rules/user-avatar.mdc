@@ -1,0 +1,44 @@
+---
+description: UI ядра — Аватар пользователя — UserAvatar
+alwaysApply: false
+---
+
+## Аватар пользователя — UserAvatar
+
+Компонент: `@/components/UserAvatar.vue`.
+
+### Обязательно
+
+- Передавай **`user-ref`** (UUID `public_id`), если объект пользователя из API уже содержит `public_id`.
+- Запрос аватара — через компонент или `getUserPublicInfoByRef` из `@/js/userAvatar`, не свой axios-запрос.
+
+### Запрещено
+
+- Передача `:user-id` / `:userId` в `UserAvatar` — числовой pk не используется для lookup аватара (см. [`security-details.mdc`](security-details.mdc) → «Публичные идентификаторы»).
+
+### Базовый пример
+
+```vue
+<!-- GOOD — lookup по public_id -->
+<UserAvatar :user-ref="user.public_id" :size="40" :title="user.name" />
+
+<!-- BAD — числовой pk, устаревший эндпоинт -->
+<UserAvatar :user-id="user.id" :size="40" :title="user.name" />
+
+<!-- без user — только размер, данные подтянет сам -->
+<UserAvatar :size="40" />
+
+<!-- свой URL или клик -->
+<UserAvatar :custom-avatar-url="url" :size="120" />
+<UserAvatar :clickable="true" @click="onClick" />
+```
+
+Пропсы: `size` (по умолчанию 40), `clickable`, `title`, `customAvatarUrl`, `userRef`, `firstName`, `lastName`, `showOnlineStatus`, `showPresenceTooltip`.
+
+Инициалы — только из имени и фамилии (поля API или ФИО из двух и больше слов в `title`). Логин и пустые имя/фамилия дают иконку Lucide `User`, не буквы.
+
+Если сериализатор API ещё не отдаёт `public_id` — добавь поле тем же паттерном, что в [`security-details.mdc`](security-details.mdc), а не обходи через pk в prop аватара.
+
+Типичные размеры: 32 (списки), 40 (меню), 120 (профиль).
+
+Смену и удаление фото — затемнение и кнопки — делай через [`ImageHoverFrame`](image-hover-frame.mdc). `UserAvatar` остаётся картинкой в слоте.

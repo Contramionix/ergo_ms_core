@@ -1,0 +1,10 @@
+---
+description: UI ядра — ImageLightbox, предпросмотр фото, галерея и зум
+alwaysApply: false
+---
+
+# Предпросмотр фото — ImageLightbox
+
+Компонент: `@/components/ImageLightbox.vue`.
+
+Проп `backdrop`: `dim` или `blur`. Режим без картинок — [`client-a11y.mdc`](client-a11y.mdc).

@@ -74,7 +74,7 @@ class MyConsumer(AsyncWebsocketConsumer):
 | Topic | Группа channel layer |
 |-------|----------------------|
 | `user:{id}` | `notifications_user_{id}` |
-| `messenger:{app.model}:{object_id}` | `messenger_{app.model}_{object_id}` |
+| `chat:{app.model}:{object_id}` | `messenger_{app.model}_{object_id}` |
 | `presence:admin` | `presence_admin` |
 | `presence:peer:{public_id}` | `presence_peer_{public_id}` |
 | `bi:dashboard:{id}` | `bi_dashboard_{id}` (модуль) |

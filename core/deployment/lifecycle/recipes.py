@@ -16,6 +16,8 @@ from cli_locale import t  # noqa: E402
 from lifecycle.context import DeploymentTarget
 from lifecycle.pipeline import ParallelStepGroup
 from lifecycle.steps.base import DeploymentStep
+from lifecycle.steps.runtime_requirements_steps import RuntimeRequirementsStep
+from lifecycle.steps.model_index_steps import InstallRuntimeModelsStep, VerifyRequiredModelsStep
 from lifecycle.steps.common_steps import (
     ClientBuildStep,
     CollectStaticStep,
@@ -54,6 +56,7 @@ from lifecycle.steps.host_steps import (
     PoetryInstallStep,
     UpdateModuleSubmodulesStep,
 )
+from lifecycle.steps.deploy_trace import BackupDatabaseStep, RecordDeployRevisionStep  # noqa: E402
 from lifecycle.steps.infra_steps import (  # noqa: E402
     EnsureMeilisearchOsServiceStep,
     EnsureMeilisearchStep,
@@ -120,6 +123,7 @@ def build_recipe_registry() -> dict[str, RecipeSpec]:
                     NpmInstallStep(),
                     name='python_and_npm',
                 ),
+                RuntimeRequirementsStep(),
                 PullHuggingfaceModelsStep(),
                 EnsurePostgresStep(),
                 EnsurePostgresOsServiceStep(),
@@ -129,6 +133,7 @@ def build_recipe_registry() -> dict[str, RecipeSpec]:
                 ClientBuildStep(),
                 # До migrate: модульные portable (pgvector и т.п.) должны быть в БД до CREATE EXTENSION.
                 ModuleSetupTasksStep(),
+                VerifyRequiredModelsStep(),
                 MigrateStep(),
                 # После migrate: задачи, которым нужна схема БД (RAG sync и т.п.).
                 ModuleSetupTasksAfterMigrateStep(),
@@ -191,7 +196,9 @@ def build_recipe_registry() -> dict[str, RecipeSpec]:
             'deploy-api',
             (
                 _deploy_api_submodules(),
+                RecordDeployRevisionStep(paths=('core/api', 'core/media_api')),
                 PythonInstallStep(),
+                BackupDatabaseStep(),
                 MigrateStep(),
                 WarmupCachesStep(),
                 CollectStaticStep(),
@@ -207,11 +214,13 @@ def build_recipe_registry() -> dict[str, RecipeSpec]:
             'deploy-all',
             (
                 _deploy_all_submodules(),
+                RecordDeployRevisionStep(paths=('core/api', 'core/client', 'core/media_api')),
                 ParallelStepGroup(
                     PythonInstallStep(),
                     NpmInstallStep(),
                     name='python_and_npm',
                 ),
+                BackupDatabaseStep(),
                 MigrateStep(),
                 WarmupCachesStep(),
                 CollectStaticStep(),
@@ -249,6 +258,8 @@ def build_recipe_registry() -> dict[str, RecipeSpec]:
                 DockerBootstrapInfraStep(),
                 PythonInstallStep(),
                 NpmInstallStep(),
+                RuntimeRequirementsStep(),
+                InstallRuntimeModelsStep(),
                 MigrateStep(),
                 WarmupCachesStep(),
                 DockerMarkSetupStep(),
@@ -266,6 +277,8 @@ def build_recipe_registry() -> dict[str, RecipeSpec]:
                 DockerBootstrapInfraStep(),
                 PythonInstallStep(),
                 NpmInstallStep(),
+                RuntimeRequirementsStep(),
+                InstallRuntimeModelsStep(),
                 MigrateStep(),
                 WarmupCachesStep(),
                 DockerMarkSetupStep(),

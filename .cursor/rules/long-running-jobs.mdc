@@ -1,6 +1,6 @@
 ---
-description: Долгие расчёты — не в shell Cursor; Celery --async, чекпоинт --resume, пауза с той же точки; PostgreSQL Redis worker
-alwaysApply: true
+description: Долгий расчёт, обучение и обход каталога — Celery --async, чекпоинт и --resume, не shell Cursor
+alwaysApply: false
 ---
 
 # Долгие расчёты вне сессии Cursor
@@ -12,6 +12,7 @@ NMT, разбор корпуса, обучение, полный обход ка
 - Запуск — Celery (`--async`) или OS-служба модуля, не дочерний процесс вкладки Cursor
 - Единица работы (ключ, uuid, slug, батч) заканчивается записью чекпоинта; повтор — `--resume` с того же ключа
 - Пауза — штатная остановка (SIGTERM / флаг паузы / `stop-worker`), не `kill -9`; продолжение — та же команда с `--resume`
+- После перезапуска воркера или `ergoms` оборванная задача модуля сама не стартует, она ждёт `ergoms celery-parked --resume <id>` — [`celery-restart.mdc`](celery-restart.mdc). Поэтому задача Celery принимает `resume` и пропускает сделанное
 - Логи — `logs/`; чекпоинт — `virtual_env/cache/` через [`project_layout.py`](../../core/deployment/project_layout.py), не `/tmp`
 
 ## Обязательно

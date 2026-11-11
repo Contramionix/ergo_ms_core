@@ -38,6 +38,18 @@ from security.csp_policy import (  # noqa: E402
 from tls_config import webroot_path  # noqa: E402
 
 
+def render_extra_include(values: dict[str, str], key: str) -> str:
+    """Optional operator-owned snippets survive regeneration; absent settings change nothing."""
+    raw = str(values.get(key, '') or '').strip()
+    if not raw:
+        return ''
+    target = Path(raw)
+    if (any(char in raw for char in ('"', '\n', '\r', ';', '$'))
+            or not target.is_absolute() or target.suffix != '.conf' or not target.is_file()):
+        raise ValueError(f'{key} must point to an existing absolute .conf file')
+    return f'include "{target.as_posix()}";'
+
+
 def render_template(
     template_path: Path,
     *,
@@ -96,6 +108,8 @@ def render_template(
         '${ERGO_JUPYTER_LOCATION}': jupyter_location,
         '${ERGO_MODULE_UPSTREAMS}': module_upstreams,
         '${ERGO_MODULE_LOCATIONS}': module_locations,
+        '${ERGO_EXTRA_HTTP_INCLUDE}': render_extra_include(values, 'NGINX_HTTP_EXTRA_INCLUDE'),
+        '${ERGO_EXTRA_SERVER_INCLUDE}': render_extra_include(values, 'NGINX_SERVER_EXTRA_INCLUDE'),
     }
     replacements.update(build_host_nginx_shared_replacements(values))
 
@@ -111,6 +125,8 @@ def render_template(
         build_security_headers_nginx(
             csp_mode,
             extra_script_hashes=read_federation_importmap_hashes(root),
+            allow_same_origin_frames=str(values.get('NGINX_ALLOW_SAME_ORIGIN_FRAMES', '')).strip().lower()
+            in ('1', 'true', 'yes'),
         ),
     )
 

@@ -1,0 +1,113 @@
+---
+paths:
+  - "core/client/**/*.vue"
+  - "modules/*/client/**/*.vue"
+  - "core/client/src/composables/useUiModes.js"
+  - "core/client/src/composables/useBreakpoint.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Доступность и адаптив клиента
+
+Единый каркас режимов живёт в ядре. Модули **не** заводят свои флаги в localStorage и **не** копируют CSS-хаки — подключаются к контракту ядра.
+
+## Кратко
+
+- Режимы на `<html>`: `data-ergo-motion`, `data-ergo-images`, `data-ergo-contrast`, `data-ergo-a11y`, `data-ergo-layout`
+- Предпочтения пользователя — `uiPreferences.js` / SystemPanel; чтение в коде — `useUiModes()`
+- Адаптив — Bootstrap breakpoints + `useBreakpoint()` / `SHELL_DESKTOP_MIN` (1200)
+- Обычный вид UI не менять: режимы только по preference / media / узкому viewport
+- Контентные картинки — `ContentImage.vue` или политика `data-ergo-images`; декоративное — `alt=""` + `aria-hidden`
+- Layout: skip-link + `<main id="main-content">`; icon-only кнопки — `aria-label`
+
+## Обязательно
+
+| Нужно | Как |
+|-------|-----|
+| Проверить «без анимаций» | `useUiModes().reducedMotionActive` или `html[data-ergo-motion='reduce']` / миксин `ui-reduced-motion` (декор). Лоадеры — текст «Загрузка...» (`SpinnerLoading`; кружки `.spinner-border` скрыты); опциональный пульс — `[data-ergo-motion-safe='pulse']`; скелетон — ровная заливка |
+| Проверить «без картинок» | `useUiModes().imagesOff` или `html[data-ergo-images='off']`; контент — `@/components/ContentImage.vue`. Preference `system` (дефолт) — probe браузера (Chrome «не показывать изображения») |
+| Высокий контраст | `useUiModes().contrastMore` / `html[data-ergo-contrast='more']`. Preference `system` (дефолт) — `prefers-contrast` / `forced-colors`; палитра временно как «Высокий контраст», `activeTheme` не затирается |
+| Экранный диктор (`assist`) | UI: «Экранный диктор → Включён». `useUiModes().a11yAssist`; усиленный focus в `_modes.scss` |
+| Ширина / mobile shell | `useBreakpoint()` — не сырой `innerWidth >= 1200` |
+| Модалки / drawer | `ModalCenter` / `SideDrawer` (focus-trap в ядре) |
+| Новый layout | `SkipLink` + `<main id="main-content" tabindex="-1">` |
+
+```js
+import { useUiModes } from '@/composables/useUiModes.js'
+import { useBreakpoint } from '@/composables/useBreakpoint.js'
+
+const { reducedMotionActive, imagesOff } = useUiModes()
+const { isShellDesktop, isCompactLayout } = useBreakpoint()
+```
+
+```scss
+@use '@/scss/ui/mixins' as *; // или локальный @include после импорта ui
+
+.my-widget {
+  @include ui-reduced-motion; // только декор (параллакс, float, spin)
+  @include ui-a11y-focus;
+}
+```
+
+```html
+<!-- GOOD — загрузка через SpinnerLoading (в reduce сам покажет «Загрузка...») -->
+<SpinnerLoading />
+
+<!-- GOOD — не-спиннер индикатор с безопасным пульсом -->
+<span class="my-loader" data-ergo-motion-safe="pulse" />
+```
+
+## Запрещено
+
+```js
+// BAD — свой ключ localStorage для a11y в модуле
+localStorage.setItem('<name>_no_anim', '1')
+
+// BAD — игнор reduced motion
+el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400 })
+
+// BAD — хардкод брейкпоинта оболочки
+if (window.innerWidth >= 1200) { ... }
+```
+
+```js
+// GOOD
+import { SHELL_DESKTOP_MIN } from '@/composables/useBreakpoint.js'
+import { getReducedMotionActive } from '@/composables/useUiModes.js'
+
+if (window.innerWidth >= SHELL_DESKTOP_MIN) { ... }
+if (!getReducedMotionActive()) { /* анимация */ }
+```
+
+```vue
+<!-- BAD — контентная картинка без политики -->
+<img :src="url" />
+
+<!-- GOOD -->
+<ContentImage :src="url" :alt="title" />
+```
+
+- Не прятать Lucide-иконки кнопок в режиме «без картинок» (ломает toolbar)
+- Не подключать Google Fonts / Analytics (CSP, [`themes.mdc`](../../.cursor/rules/themes.mdc))
+- Не ослаблять CSP ради Lighthouse
+
+## Эталоны в ядре
+
+| Тема | Путь |
+|------|------|
+| Prefs + attrs | [`uiPreferences.js`](../../core/client/src/js/uiPreferences.js) |
+| Early apply | [`bootstrap-early.js`](../../core/client/src/js/bootstrap-early.js) |
+| CSS режимов | [`_modes.scss`](../../core/client/src/scss/ui/_modes.scss) |
+| Настройки UI | [`SystemPanel.vue`](../../core/client/src/core/cms/adp/user/account/component/settings-panels/SystemPanel.vue) |
+| Skip / main | [`LayoutMenu.vue`](../../core/client/src/LayoutMenu.vue), [`SkipLink.vue`](../../core/client/src/components/SkipLink.vue) |
+| Focus trap | [`focusTrap.js`](../../core/client/src/js/utils/focusTrap.js) |
+| ESLint a11y | [`eslint.config.js`](../../core/client/eslint.config.js) — `eslint-plugin-vuejs-accessibility`; `ergoms npm run lint` / `ergoms npm run lint:a11y` |
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Клиент Vue | [`client_code.mdc`](../../.cursor/rules/client_code.mdc) |
+| Компоненты | [`components.mdc`](../../.cursor/rules/components.mdc) |
+| Темы, шрифты | [`themes.mdc`](../../.cursor/rules/themes.mdc) |
+| Модалки | [`modal-center.mdc`](../../.cursor/rules/modal-center.mdc) |

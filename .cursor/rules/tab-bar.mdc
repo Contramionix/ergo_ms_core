@@ -1,0 +1,44 @@
+---
+description: UI ядра — Вкладки — TabBar
+alwaysApply: false
+---
+
+## Вкладки — TabBar
+
+Компонент: `@/components/TabBar.vue`.
+
+Полоса вкладок страницы: иконка, подпись, опциональный бейдж. Контент вкладки — в слоте по умолчанию (или снаружи, если слот пустой). Не копируй `.nav-tabs-container` / `.nav-tab` в модуле.
+
+Админские экраны ядра с Bootstrap `nav nav-tabs` / `nav-link` не переводи на `TabBar` без отдельной задачи: это другой вид.
+
+```vue
+<script setup>
+import TabBar from '@/components/TabBar.vue'
+</script>
+
+<template>
+  <TabBar v-model="activeTab" :tabs="tabs">
+    <Overview v-if="activeTab === 'overview'" />
+  </TabBar>
+</template>
+```
+
+`tabs` — массив `{ id, name, icon?, count? }`. `icon` — Vue-компонент Lucide. Бейдж виден при истинном `count`.
+
+| Prop | Когда |
+|------|-------|
+| `modelValue` | id активной вкладки |
+| `tabs` | список вкладок |
+| `overflow` | `'scroll'` (по умолчанию) — если вкладки не помещаются, слева и справа кнопки сдвигают ряд, полосы прокрутки нет; `'menu'` — невместившееся уходит в кнопку «Ещё» (`DropDown`) |
+| `ariaLabel` | подпись `tablist`; иначе `components.tabBar.ariaLabel` |
+
+На одном экземпляре один режим `overflow`, без смеси прокрутки и «Ещё». В режиме `scroll` кнопки появляются только когда ряд не помещается и сдвигают его примерно на три четверти видимой ширины. В режиме `menu` активная вкладка остаётся в видимом ряду, даже если по ширине она должна была попасть в список.
+
+### Запрещено
+
+```vue
+<!-- BAD — своя полоса вкладок в модуле -->
+<nav class="nav-tabs-container">
+  <button class="nav-tab" :class="{ active: tab === 'a' }">…</button>
+</nav>
+```

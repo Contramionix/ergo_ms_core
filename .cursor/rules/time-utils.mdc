@@ -15,6 +15,7 @@ import { getRelativeTime, formatDateTime, formatChatListTime } from '@/js/utils/
 | «5 минут назад» | `getRelativeTime` |
 | Список чатов (сегодня часы, вчера слово, иначе дата) | `formatChatListTime` |
 | Дата и время | `formatDateTime` |
+| Время «09:15» | `formatTime` |
 | Дата словами и время | `formatDateTimeLong` |
 | Дата со днём недели и временем | `formatDateWeekdayTime` |
 | Дата «01 января 2024» | `formatDate` |

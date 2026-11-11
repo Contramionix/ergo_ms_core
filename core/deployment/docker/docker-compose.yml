@@ -101,6 +101,8 @@ networks:
     driver: bridge
 
 volumes:
+  client_dist:
+    name: ${DOCKER_COMPOSE_PROJECT:-ergo_ms}_client_dist
   celery_cache:
     name: ${DOCKER_COMPOSE_PROJECT:-ergo_ms}_celery_cache
   poetry_venv:

@@ -54,6 +54,8 @@ def marker_relative(spec: PackageSpec) -> str | None:
 
 
 def is_platform_supported(spec: PackageSpec) -> bool:
+    if spec.supported_platforms and current_platform_key() not in spec.supported_platforms:
+        return False
     if spec.kind == PackageKind.ARCHIVE:
         return resolve_platform_archive(spec) is not None
     # custom: считаем поддерживаемым, если есть marker для ОС или marker не задан
@@ -67,15 +69,21 @@ def is_platform_supported(spec: PackageSpec) -> bool:
 
 
 def is_installed(root: Path, spec: PackageSpec) -> bool:
+    dest = package_dir(root, spec.dest)
+    for alternatives in spec.required_files.get(current_platform_key(), ()):
+        if not any(_nonempty_file(dest / path, minimum=spec.minimum_sizes.get(path, 1)) for path in alternatives):
+            return False
     rel = marker_relative(spec)
     if not rel:
         dest = package_dir(root, spec.dest)
         return dest.is_dir() and any(dest.iterdir())
     marker = package_dir(root, spec.dest) / rel
-    if not marker.is_file():
-        return False
+    return _nonempty_file(marker, minimum=spec.minimum_sizes.get(rel, 1))
+
+
+def _nonempty_file(path: Path, *, minimum: int = 1) -> bool:
     try:
-        return marker.stat().st_size > 0
+        return path.is_file() and path.stat().st_size >= minimum
     except OSError:
         return False
 
@@ -114,7 +122,7 @@ def _resolve_installer_script(root: Path, spec: PackageSpec) -> Path:
     return path
 
 
-def _run_custom_installer(root: Path, spec: PackageSpec, *, force: bool) -> int:
+def _run_custom_installer(root: Path, spec: PackageSpec, *, force: bool, refresh: bool = False) -> int:
     script = _resolve_installer_script(root, spec)
     python = sys.executable
     argv = [python, str(script), *spec.installer_args]
@@ -124,6 +132,8 @@ def _run_custom_installer(root: Path, spec: PackageSpec, *, force: bool) -> int:
             argv.extend(['--root', str(root)])
         if force and '--force' not in args_lower:
             argv.append('--force')
+        if refresh and spec.raw.get('supports_refresh') and '--refresh' not in args_lower:
+            argv.append('--refresh')
     print(format_console('info', f'Запуск установщика: {script.name}'))
     result = subprocess.run(argv, cwd=str(root), check=False)
     return int(result.returncode)
@@ -172,7 +182,9 @@ def install_package(
                 return 0
             install_archive_package(root, spec, plat, force=force, refresh=refresh)
             return 0
-        code = _run_custom_installer(root, spec, force=force)
+        code = _run_custom_installer(root, spec, force=force, refresh=refresh)
+        if code == 0 and spec.supported_platforms and not is_installed(root, spec):
+            raise PackageInstallError(f'После установки {name} не найдены обязательные файлы')
         if code != 0:
             print(format_console('error', f'Установщик пакета {name} завершился с кодом {code}'), file=sys.stderr)
         return code

@@ -1,0 +1,70 @@
+---
+paths:
+  - "core/api/src/core/integrations/**"
+  - "core/client/src/integrations/**"
+  - "**/module_contracts.py"
+  - "**/moduleContracts.js"
+  - "**/integrations.py"
+  - "**/integrations.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Platform-контракты модулей
+
+Ядро публикует **имена контрактов** и runtime-хелперы; модули **реализуют** их в `integrations.py` / `client/js/integrations.js` без import из других модулей.
+
+## Кратко
+
+- Каталог имён: [`module_contracts.py`](../../core/api/src/core/integrations/module_contracts.py) (сервер), [`moduleContracts.js`](../../core/client/src/integrations/moduleContracts.js) (клиент)
+- В каталог ядра — **только** контракты, которые **ядро само** вызывает (`bridge.call` / `bridge.all` / `emit`) или чьи хелперы живут в `core/`
+- Связь **модуль ↔ модуль** без участия ядра — **не** в каталоге и **не** в файлах `core/…/integrations/`; строка группы у хоста и у провайдера (дублирование допустимо)
+- Регистрация — `bridge.provide_many(group, key, obj)` / `bridge.subscribe_to(event)` / `bridge.provide_op(...)`
+- Hook discovery — фиксированные имена файлов; ядро сканирует, не импортирует домен
+- JWT session-claims (например `<scope_claim>` / `<child_claim>`) декларирует модуль через `session_context.claims`; session-scoped UI — `@/integrations/sessionScopedModuleContext.js`
+- Session-scope guard — `@/js/session/sessionScopeGuard.js`; welcome/home — группа `session.scope_entry_routes`
+- Активность scope на клиенте гейтит модуль через `session.scope_gating_claim` (`@/integrations/sessionScopeGating.js`)
+- Полный список **platform**-контрактов — таблица ниже; эталон stub — `modules/<name>/` (hook-файлы и пустые integrations)
+
+## Что класть в каталог ядра
+
+| Вопрос | В `moduleContracts` / `module_contracts` | Где жить коду |
+|--------|------------------------------------------|---------------|
+| Ядро читает группу/событие/op? | **Да** — константа + при необходимости generic-хелпер | `core/…/integrations/` |
+| Только модуль A собирает UI, модуль B регистрирует панель/виджет? | **Нет** | хост-модуль (константа + `bridge.all`); провайдер — та же строка локально |
+| Имя с доменом модуля (`scope_*`, `<host>_settings.*`)? | **Нет** в ядре | только в модулях |
+
+```javascript
+// BAD — межмодульный UI-контракт в ядре (ядро группу не читает)
+// core/client/src/integrations/moduleContracts.js
+export const HOST_SETTINGS_ADDITIONAL_PANELS_GROUP = 'host_settings.additional_panels'
+
+// GOOD — хост (<host_module>) владеет группой и хелпером
+// modules/<host_module>/client/js/settingsAdditionalPanels.js
+export const HOST_SETTINGS_ADDITIONAL_PANELS_GROUP = 'host_settings.additional_panels'
+
+// GOOD — провайдер (<provider>) дублирует строку, без import из хоста и без ядра
+// modules/<provider>/client/js/integrations.js
+const HOST_SETTINGS_ADDITIONAL_PANELS_GROUP = 'host_settings.additional_panels'
+bridge.provideMany(HOST_SETTINGS_ADDITIONAL_PANELS_GROUP, '<provider>_panel', { … })
+```
+
+Эталон межмодульного расширения настроек хоста: `modules/<host_module>/client/js/…AdditionalPanels.js` ← `modules/<provider>/client/js/integrations.js`.
+
+## Обязательно
+
+- Platform-константы импортируй **оттуда, где их объявило ядро**: общий каталог [`moduleContracts.js`](../../core/client/src/integrations/moduleContracts.js) и [`module_contracts.py`](../../core/api/src/core/integrations/module_contracts.py), а для отдельных слоёв — профильный файл интеграций ядра (например `SESSION_SCOPE_GATING_CLAIM_GROUP` объявлен в `@/integrations/sessionScopeGating.js`). Копировать строку контракта в модуль нельзя
+- Session-scoped маршруты — `SESSION_SCOPED_MODULE_CONTEXT_GROUP` + хелперы из `@/integrations/sessionScopedModuleContext.js`
+- Маршруты с `meta.requiresSessionScope` — platform-guard в [`routers.js`](../../core/client/src/js/routers.js) (`runSessionScopeGuard`); модульный `routeGuard.js` — только доменная доработка (validateSession и т.п.)
+- Серверный session-claim (claim + resolver) — дескриптор в `SESSION_CLAIMS_GROUP` в `api/integrations.py`
+- Клиентский gating-claim активного scope — строка claim в `SESSION_SCOPE_GATING_CLAIM_GROUP`
+- Scoped API views — `RequiresSessionScope` / `@session_scope_required` из [`session_scope.py`](../../core/api/src/core/utils/middleware/session_scope.py) (не глобальный middleware)
+
+## Запрещено
+
+- Прямой `import` из `modules/<другой>/` (API и клиент) — только ModuleBridge
+- Hardcoded строки **platform**-групп моста, если константа уже есть в каталоге ядра
+- Класть в каталог / `core/…/integrations/` группы и хелперы, которые ядро **не** потребляет (типичный антипаттерн: «удобный» re-export для связи двух модулей)
+- Именование конкретного домена (конкретный scope entity и т.п.) в ядре — session-scope и прочие слои ядра generic
+- Файлы вроде `*Settings*.js` / доменные хелперы межмодульных групп в `core/client/src/integrations/`
+
+Полный список имён и пример session-scope — [`module-contracts-catalog.mdc`](../../.cursor/rules/module-contracts-catalog.mdc). Открывай его, когда добавляешь константу контракта.

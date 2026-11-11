@@ -125,11 +125,30 @@ def process_service_unit_name(module: str, kind: str, prefix: str | None = None)
 
 def is_module_process_service_unit(unit: str, module: str) -> bool:
     short = unit[: -len('.service')] if unit.endswith('.service') else unit
+    worker = process_service_unit_name(module, 'worker')
+    if short == worker or short.startswith(f'{worker}_'):
+        return True
     return short in (
         process_service_unit_name(module, 'api'),
-        process_service_unit_name(module, 'worker'),
         process_service_unit_name(module, 'beat'),
     )
+
+
+def named_module_worker_units(project_root: Path, module: str) -> list[str]:
+    """Имена OS-служб именованных воркеров из hook модуля."""
+    api_dir = Path(project_root) / 'core' / 'api'
+    if str(api_dir) not in sys.path:
+        sys.path.insert(0, str(api_dir))
+    from service_names import names_from_root
+    from src.core.utils.celery.module_queues import read_module_workers
+
+    names = names_from_root(Path(project_root))
+    units: list[str] = []
+    for spec in read_module_workers(Path(project_root) / 'modules' / module):
+        worker_id = str(spec.get('name') or '').strip()
+        if worker_id:
+            units.append(names.module_worker(module, worker_id))
+    return units
 
 
 def _parse_file(path: Path, *, module_dir_name: str) -> HostLifecycleEntry | None:
@@ -223,11 +242,25 @@ def _kind_from_process_unit(unit: str, module: str) -> str | None:
     short = unit[: -len('.service')] if unit.endswith('.service') else unit
     if short == process_service_unit_name(module, 'api'):
         return 'api'
-    if short == process_service_unit_name(module, 'worker'):
+    worker = process_service_unit_name(module, 'worker')
+    if short == worker or short.startswith(f'{worker}_'):
         return 'worker'
     if short == process_service_unit_name(module, 'beat'):
         return 'beat'
     return None
+
+
+def _redundant_generic_worker_unit(root: Path, module: str, unit: str) -> bool:
+    """Общий worker не нужен, если именованные воркеры забрали все очереди."""
+    short = unit[: -len('.service')] if unit.endswith('.service') else unit
+    if short != process_service_unit_name(module, 'worker'):
+        return False
+    api_dir = Path(root) / 'core' / 'api'
+    if str(api_dir) not in sys.path:
+        sys.path.insert(0, str(api_dir))
+    from src.core.utils.celery.module_queues import generic_module_worker_needed
+
+    return not generic_module_worker_needed(module, Path(root) / 'modules' / module)
 
 
 def allows_module_kind(catalog: ModuleCatalog, host_profile, module: str, kind: str) -> bool:
@@ -274,6 +307,11 @@ def aggregate_host_lifecycle(project_root: Path | str) -> HostLifecycleAggregate
             if cmd not in seen_install:
                 seen_install.add(cmd)
                 agg.install_service_commands.append(cmd)
+            if parsed is not None and parsed[2] == 'worker':
+                for unit in named_module_worker_units(root, entry.module):
+                    if unit not in seen_units:
+                        seen_units.add(unit)
+                        agg.service_units.append(unit)
         for cmd in entry.uninstall_service_commands:
             if cmd not in seen_uninstall:
                 seen_uninstall.add(cmd)
@@ -283,6 +321,8 @@ def aggregate_host_lifecycle(project_root: Path | str) -> HostLifecycleAggregate
             if kind is not None and not allows_module_kind(
                 catalog, host_profile, entry.module, kind
             ):
+                continue
+            if _redundant_generic_worker_unit(root, entry.module, unit):
                 continue
             if unit not in seen_units:
                 seen_units.add(unit)

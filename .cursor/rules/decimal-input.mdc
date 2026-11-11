@@ -1,0 +1,17 @@
+---
+description: UI ядра — Ввод числа — DecimalInput
+alwaysApply: false
+---
+
+## Ввод числа — DecimalInput
+
+Компонент: `@/components/DecimalInput.vue`.
+
+`v-model` — **строка**. Допускает цифры и один разделитель `.` или `,`. Без минуса и без денежного форматирования. Парсинг числа — у потребителя.
+
+| Prop | Когда |
+|------|-------|
+| `allowDecimal` | `false` — только целые |
+| `maxDecimalPlaces` | ограничить дробную часть |
+| `showSteppers` | стрелки вверх/вниз (`step`, опционально `min`/`max`); по умолчанию выкл. |
+| `inputClass` | классы на `<input>` (`form-control-sm` и т.п.) |

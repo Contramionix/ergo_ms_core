@@ -316,6 +316,7 @@ def _render_module_media_locations(
         limit_conn_status 429;
         proxy_buffering off;
         gzip off;
+        proxy_set_header X-Ergo-Accel 1;
         proxy_pass http://{upstream};
 {timeouts}{extra_headers}    }}
 """

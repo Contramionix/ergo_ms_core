@@ -1,0 +1,19 @@
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Команды — только через ergoms
+
+Миграции, запуск, зависимости, сборка, Celery и статика — только `ergoms`. Не предлагай `python manage.py`, `pip`, `poetry` и `npm` как основной способ. Справочник — [`.docs/cli.md`](../../.docs/cli.md), формат — [`ergoms-commands.mdc`](../../.cursor/rules/ergoms-commands.mdc).
+
+| Задача | Команда |
+|---|---|
+| Настройка | `ergoms setup` |
+| Миграции | `ergoms migrate-all` / `db-migrate` / `db-makemigrations` |
+| API / клиент | `ergoms dev` / `start-client` |
+| Сборка клиента | `ergoms client-build` |
+| Celery | `ergoms start-worker` / `start-beat` |
+| Зависимости | `ergoms python-install`, `ergoms npm install` |
+| Django | `ergoms api <команда>` |
+
+Модуль: `ergoms <имя>:<команда>`. Не правь `manage.py`, чтобы обойти ergoms. Метки CLI — `[OK]` / `[ERROR]`, текст — `t('key')` ([`console-output.mdc`](../../.cursor/rules/console-output.mdc)).
+
+Одно окружение: portable CPython в `virtual_env/packages/python/`, venv в `virtual_env/python/` (`bin/python` на Linux, `Scripts/python.exe` на Windows). Node — `virtual_env/packages/nodejs/`, npm workspace — `virtual_env/npm/` ([`npm-workspace.mdc`](../../.cursor/rules/npm-workspace.mdc)). Не создавай `.venv`, не ставь пакеты мимо ergoms и не удаляй `virtual_env/` целиком. Если Python не найден: `ergoms install-python`, затем `ergoms python-install`. Подробности путей — [`virtual-env.mdc`](../../.cursor/rules/virtual-env.mdc).

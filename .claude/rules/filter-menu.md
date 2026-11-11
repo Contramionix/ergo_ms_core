@@ -1,0 +1,131 @@
+---
+paths:
+  - "core/client/**/*.vue"
+  - "core/client/**/*.js"
+  - "modules/**/client/**/*.vue"
+  - "modules/**/client/**/*.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# FilterMenu — составная панель фильтров
+
+Для **нескольких связанных фильтров** в toolbar (группы, select + date, одна кнопка «Фильтры») используй **`FilterMenu`** из ядра.
+
+Компонент: `@/components/FilterMenu.vue`  
+Composable позиционирования: `@/composables/useFilterMenuFlyout.js`
+
+## Когда FilterMenu, а когда SelectBox
+
+| Сценарий | Компонент |
+|----------|-----------|
+| Один выбор из списка (роль, статус, модуль) | `SelectBox` — [`select-box.mdc`](../../.cursor/rules/select-box.mdc) |
+| Несколько фильтров в одном меню (модуль + действие + даты) | `FilterMenu` |
+| Текстовый поиск | `SearchInput` рядом — [`search-input.mdc`](../../.cursor/rules/search-input.mdc) |
+| Multi-select теги + поиск (toolbar модуля) | `FiltersBar` модуля — без замены на FilterMenu |
+
+**FilterMenu не заменяет `SelectBox`** для простого выбора. Не делай свой выпадающий список с подменю в модуле.
+
+## Обязательно
+
+- Импорт: `import FilterMenu from '@/components/FilterMenu.vue'`
+- `v-model` — **объект** значений по ключам полей
+- `fields` — декларативная схема (массив)
+- Доменная логика (сброс зависимых фильтров, API-параметры) — **на странице**, не внутри FilterMenu
+- Tooltip с активными значениями — снаружи через `HoverTooltip` + computed на странице
+
+## Запрещено
+
+```vue
+<!-- BAD — несколько SelectBox + date в toolbar вместо FilterMenu -->
+<SelectBox v-model="module" ... />
+<SelectBox v-model="action" ... />
+<input type="date" v-model="dateFrom" />
+
+<!-- BAD — свой многоуровневый выпадающий список фильтров в модуле -->
+<div class="my-filter-menu">...</div>
+```
+
+## Базовый пример
+
+```vue
+<script setup>
+import FilterMenu from '@/components/FilterMenu.vue'
+import SearchInput from '@/components/SearchInput.vue'
+import HoverTooltip from '@/components/HoverTooltip.vue'
+
+const filters = ref({ module: '', action: '', dateFrom: '', dateTo: '' })
+
+const filterFields = computed(() => [
+  { type: 'heading', label: 'Событие' },
+  {
+    type: 'select', key: 'module', label: 'Модуль',
+    options: moduleOptions.value, valueKey: 'value', labelKey: 'label',
+    includeAllOption: true, allLabel: 'Все модули', searchable: true,
+  },
+  { type: 'heading', label: 'Период' },
+  { type: 'date', key: 'dateFrom', label: 'С' },
+  { type: 'date', key: 'dateTo', label: 'По' },
+])
+</script>
+
+<template>
+  <SearchInput v-model="searchQuery" layout="grow" :show-icon="true" />
+  <HoverTooltip :text="filtersTooltip" wrap>
+    <FilterMenu
+      v-model="filters"
+      :fields="filterFields"
+      trigger-label="Фильтры"
+      apply-on-change
+      @apply="applyFilters"
+    />
+  </HoverTooltip>
+</template>
+```
+
+Эталон: [`AuditLog.vue`](../../core/client/src/core/cms/adp/admin/AuditLog.vue).
+
+## Схема `fields`
+
+| `type` | Назначение |
+|--------|------------|
+| `heading` | Подзаголовок группы (`label`), не интерактивный |
+| `select` | Flyout со списком; props как у SelectBox: `options`, `valueKey`, `labelKey`, `includeAllOption`, `allLabel`, `searchable`, `defaultValue` |
+| `date` | Flyout с `DatePicker` (`YYYY-MM-DD`) |
+
+Обязательные поля интерактивного пункта: `type`, `key`, `label`.
+
+## Частые props
+
+| Prop | По умолчанию | Когда |
+|------|--------------|--------|
+| `modelValue` | `{}` | объект фильтров |
+| `fields` | `[]` | схема меню |
+| `triggerLabel` | `'Фильтры'` | текст кнопки; при активных фильтрах — «Фильтры (N)». Значение поля, равное `defaultValue`, в счётчик не входит |
+| `applyOnChange` | `true` | `@apply` сразу после изменения |
+| `label` | `''` | подпись над триггером |
+| `disabled` | `false` | блокировка |
+
+**Emits:** `update:modelValue`, `apply`, `reset` (кнопка «Сбросить» внутри меню; поиск снаружи не сбрасывает), `flyout-search` (`{ key, query }`), `flyout-more` (`{ key, query }`).
+
+У `select` поле `incremental` значит, что варианты приходят снаружи порциями. Строка поиска их на клиенте не режет, а шлёт `flyout-search`. Прокрутка списка до конца шлёт `flyout-more`, пока у поля `hasMore`. Пока идёт догрузка, у поля `loadingMore`, чтобы запрос не повторялся. Страница дописывает `options`.
+
+## CSS-переменные
+
+```scss
+.my-toolbar :deep(.filter-menu) {
+  --filter-menu-trigger-font-size: 1rem;  /* триггер — фиксированный размер */
+  --select-box-font-size: 0.875rem;       /* пункты меню и flyout */
+}
+```
+
+Боковой список значений (`flyout`) растёт по самому длинному пункту, до 640px или края окна. Текст пункта не обрезается многоточием: если ширина упёрлась в потолок, подпись переносится на следующую строку. Подменю не переключается и не закрывается, пока курсор идёт к нему внутри треугольника; если курсор замер, выбирается строка под ним.
+
+Toolbar layout: `SearchInput` — `flex: 1 1 0`, FilterMenu — `flex: 0 0 auto`. Обёртка для tooltip: `:deep(.hover-tooltip) { display: contents; }`.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Простой выбор из списка | [`select-box.mdc`](../../.cursor/rules/select-box.mdc) |
+| Текстовый поиск | [`search-input.mdc`](../../.cursor/rules/search-input.mdc) |
+| Другие компоненты ядра | [`components.mdc`](../../.cursor/rules/components.mdc) |

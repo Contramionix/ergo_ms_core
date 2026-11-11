@@ -16,8 +16,8 @@
  * ссылок workspace. Недостающие пакеты ядра ставятся отдельно в staging, без
  * повторного разрешения уже стоящего Vue. Сменившийся lock при пакетах на
  * месте только обновляет отпечаток. Пакеты модулей тоже доустанавливаются
- * в staging и копируются, чтобы `npm install` в npm-root не снимал --no-save
- * пакеты и не упирался в peer-зависимости.
+ * в staging и копируются вместе со своими вложенными зависимостями, чтобы
+ * не заменять транзитивные пакеты ядра и не снимать его --no-save пакеты.
  * С --update — переустанавливает модульные пакеты в пределах semver из package.json.
  * С --check — код 0, если прямые пакеты ядра и модулей есть в node_modules, иначе 1.
  */
@@ -108,7 +108,7 @@ function collectModuleDependencies() {
 
 function isDependencyInstalled(depName) {
   // Vite резолвит только hoisted node_modules — вложенные копии в modules/*/client не считаем.
-  return fs.existsSync(path.join(NPM_ROOT, 'node_modules', depName))
+  return fs.existsSync(path.join(NPM_ROOT, 'node_modules', depName, 'package.json'))
 }
 
 function hasMissingDirectPackages(moduleDeps) {
@@ -212,6 +212,17 @@ function runNpmInstallWithCacheRepair(runOnce) {
 }
 
 function copyPackageTree(sourceDir, targetDir) {
+  const name = path.basename(sourceDir)
+  if (name.startsWith('@') && fs.existsSync(sourceDir) && fs.statSync(sourceDir).isDirectory()) {
+    fs.mkdirSync(targetDir, { recursive: true })
+    for (const child of fs.readdirSync(sourceDir)) {
+      if (child.startsWith('.')) {
+        continue
+      }
+      copyPackageTree(path.join(sourceDir, child), path.join(targetDir, child))
+    }
+    return
+  }
   if (fs.existsSync(targetDir)) {
     fs.rmSync(targetDir, { recursive: true, force: true })
   }
@@ -233,7 +244,7 @@ function installPackageSpecsInStaging(specs, label) {
   fs.writeFileSync(
     path.join(staging, '.npmrc'),
     [
-      'install-strategy=hoisted',
+      'install-strategy=shallow',
       'package-lock=false',
       'legacy-peer-deps=true',
       'fetch-timeout=60000',

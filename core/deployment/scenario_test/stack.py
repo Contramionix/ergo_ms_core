@@ -187,6 +187,7 @@ def write_runtime_env(
         'NGINX_ENABLED': 'true',
         'MODULE_RUNTIME': 'monolith',
         'API_HOST': '0.0.0.0',
+        'API_AUTORELOAD': 'false',
         'API_PORT': str(int(ports['api'])),
         'API_ALLOWED_HOSTS': 'localhost,127.0.0.1,api',
         'ERGO_DOCKER_DB_HOST': 'postgres',

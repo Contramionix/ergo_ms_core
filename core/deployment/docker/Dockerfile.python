@@ -30,6 +30,15 @@ RUN if command -v poetry >/dev/null 2>&1; then \
       && pip install --no-cache-dir "poetry==${POETRY_VERSION}"; \
     fi
 
+# commands install запускается системным Python до заполнения volume venv.
+# Проверка изоляции должна читать YAML уже на этом этапе (версия из poetry.lock).
+RUN python -c "import yaml" 2>/dev/null || pip install --no-cache-dir "PyYAML==6.0.3"
+
+# Existing portable model runtime archives use zstd on Linux.
+RUN command -v zstd >/dev/null 2>&1 || (apt-get update \
+    && apt-get install -y --no-install-recommends zstd \
+    && rm -rf /var/lib/apt/lists/*)
+
 WORKDIR /app
 
 # Зависимости lock — отдельный слой (без modules/, чтобы правки кода не сбрасывали кэш)
@@ -38,8 +47,7 @@ COPY pyproject.toml poetry.lock ./
 RUN mkdir -p core/api core/media_api modules virtual_env/python virtual_env/cache logs media notebooks \
     /usr/local/lib/ergo-ms
 
-RUN --mount=type=cache,id=ergo_poetry_cache,target=/tmp/poetry-cache,sharing=locked \
-    sh -c 'if [ "$ERGO_DOCKER_DEPS_CACHE" != "off" ]; then \
+RUN sh -c 'if [ "$ERGO_DOCKER_DEPS_CACHE" != "off" ]; then \
       if poetry run python -c "import django" >/dev/null 2>&1; then \
         echo "django ok (cached)"; \
       else \
@@ -58,6 +66,7 @@ COPY core/api/src ./core/api/src
 COPY core/api/commands ./core/api/commands
 COPY core/api/scripts ./core/api/scripts
 COPY core/media_api/src ./core/media_api/src
+COPY core/shared ./core/shared
 COPY modules ./modules
 
 # Вне /app — bind-mount проекта на Windows не перезаписывает entrypoint (CRLF)
@@ -73,3 +82,100 @@ RUN sed -i 's/\r$//' /usr/local/bin/ergo-docker-entrypoint.sh \
 ENV PATH="/app/virtual_env/python/bin:${PATH}"
 
 ENTRYPOINT ["/usr/local/bin/ergo-docker-entrypoint.sh"]
+
+# Воркер кластера: код и venv внутри образа, без bind-mount корня проекта.
+# Клиент Docker и библиотеки браузера нужны, чтобы задача на узле могла открыть свой контейнер и окно.
+FROM base AS worker
+ARG TARGETARCH
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        fonts-liberation \
+        libasound2 \
+        libatk-bridge2.0-0 \
+        libatk1.0-0 \
+        libcups2 \
+        libdbus-1-3 \
+        libdrm2 \
+        libgbm1 \
+        libglib2.0-0 \
+        libnspr4 \
+        libnss3 \
+        libpango-1.0-0 \
+        libx11-xcb1 \
+        libxcb-dri3-0 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxi6 \
+        libxkbcommon0 \
+        libxrandr2 \
+        libxshmfence1 \
+    && arch="${TARGETARCH:-amd64}" \
+    && case "$arch" in \
+         amd64) docker_arch=x86_64 ;; \
+         arm64) docker_arch=aarch64 ;; \
+         *) docker_arch=x86_64 ;; \
+       esac \
+    && curl -fsSL "https://download.docker.com/linux/static/stable/${docker_arch}/docker-27.5.1.tgz" \
+        | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
+    && rm -rf /var/lib/apt/lists/*
+ENV CELERY_CLUSTER=on \
+    CELERY_CLUSTER_ROLE=agent
+# Ядро ставится из poetry.lock. Эти пакеты живут только в pyproject модулей,
+# без них воркер падает на импорте моделей и на задаче парсера.
+RUN poetry run pip install --no-cache-dir \
+        'pgvector>=0.3.6,<0.4' \
+        'aiohttp>=3.13.3,<4' \
+        'beautifulsoup4>=4.14.3,<5' \
+        'lxml>=6.0.2,<7' \
+        'pypdf>=6.14.2,<7' \
+        'pdfplumber>=0.11.0,<0.12' \
+        'selenium>=4.27.0,<5' \
+        'python-docx>=1.2.0,<2' \
+        'docxtpl>=0.20.2,<0.21' \
+        'openpyxl>=3.1.0,<4' \
+        'httpx>=0.28.0,<1' \
+        'django-filter>=24.3' \
+        'Pillow>=11.0' \
+        'psutil>=6.0' \
+        'numpy>=2.0' \
+        'pandas>=2.2' \
+        'scipy>=1.15' \
+        'scikit-learn>=1.4' \
+        'scikit-image>=0.25' \
+        'opencv-python-headless>=4.12,<5' \
+        'matplotlib>=3.10' \
+        'joblib>=1.4' \
+        'pyarrow>=23.0' \
+        'networkx>=3.2' \
+        'sqlalchemy>=2.0' \
+        'pydantic>=2.12' \
+        'clickhouse-connect>=0.8.18' \
+        'pymssql>=2.3.7' \
+        'reportlab>=4.4' \
+        'sympy>=1.14' \
+        'polars>=1.35' \
+        'chonkie>=1.5,<2'
+# Chrome for Testing линкуется с cairo. Отдельный слой, чтобы не сбрасывать pip.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libcairo2 \
+    && rm -rf /var/lib/apt/lists/*
+# Эмбеддинги фактов и OCR сканов. Torch под CPU: видеокарту узла держит сервис Ollama.
+RUN poetry run pip install --no-cache-dir \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        'torch==2.11.0+cpu' \
+        'transformers>=4.53.2' \
+        'sentence-transformers>=3.0.0' \
+        'sentencepiece>=0.2.0' \
+        'pytesseract>=0.3.13,<0.4'
+# Веса Hugging Face скачиваются один раз в том кэша, а не в слой контейнера.
+ENV HF_HOME=/app/virtual_env/cache/huggingface
+# Последним слоем: правка развёртывания не переустанавливает пакеты выше.
+COPY core/deployment ./core/deployment
+CMD ["python", "core/api/scripts/start_celery_worker.py"]
+
+# Последняя стадия — прежний образ Compose. Сборка без --target её и берёт.
+FROM base AS runtime

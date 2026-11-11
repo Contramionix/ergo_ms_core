@@ -1,0 +1,4 @@
+#!/bin/sh
+# Не даёт закоммитить устаревшие копии .claude/rules из .cursor/rules.
+# Включение: git config core.hooksPath .githooks
+python3 "$(git rev-parse --show-toplevel)/.claude/scripts/sync_claude_rules.py" --check || exit 1

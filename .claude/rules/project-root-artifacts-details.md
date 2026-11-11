@@ -1,0 +1,109 @@
+---
+paths:
+  - "core/deployment/**"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Артефакты в корне — детали
+
+Краткое правило: [`project-root-artifacts.mdc`](../../.cursor/rules/project-root-artifacts.mdc). Пути: [`project_layout.py`](../../core/deployment/project_layout.py).
+
+## Каталоги
+
+| Назначение | Путь |
+|---|---|
+| Portable CPython 3.12 | `virtual_env/packages/python/` |
+| Python venv | `virtual_env/python/` |
+| Portable Node.js LTS | `virtual_env/packages/nodejs/` |
+| nginx / Redis / NSSM / модульные portable | `virtual_env/packages/{nginx,redis,nssm,…}/` — реестр: [`packages.mdc`](../../.cursor/rules/packages.mdc) |
+| Let's Encrypt + ACME webroot | `virtual_env/packages/letsencrypt/`, `…/certbot/webroot/` |
+| pip / Poetry / npm cache | `virtual_env/cache/{pip,poetry,npm}/` |
+| Hugging Face Hub cache (`HF_HOME`) | `virtual_env/cache/huggingface/` |
+| Снимки Hugging Face (`org/name`) | `virtual_env/trained_models/huggingface/` |
+| Архивы portable Python / Node.js | `virtual_env/cache/downloads/` |
+| Docker BuildKit local cache (`DOCKER_DEPS_CACHE=project`) | `virtual_env/cache/docker-cache/` |
+| Loadtest (temp DB/ephemeral) | `virtual_env/cache/loadtest/` |
+| Балансировщик Celery (overlay, история) | `virtual_env/cache/celery_balance/` |
+| Очередь встроенного браузера Cursor по SSH | `virtual_env/cache/cursor_browser_queue/` |
+| Lock записи секретов в `.env` / `databases.yaml` | `virtual_env/cache/env_secrets.lock` |
+| Meilisearch (runtime, LMDB) | `virtual_env/cache/meilisearch/` |
+| Portable Meilisearch | `virtual_env/packages/meilisearch/` |
+| npm workspace (package.json, lock, node_modules) | `virtual_env/npm/` |
+| Временные extract | `virtual_env/cache/tmp/` |
+| Jupyter | `virtual_env/jupyter/` |
+| Env + systemd units | `core/deployment/wrappers/`, `…/systemd/` |
+| clean trash | `.ergo_clean_trash_*` в корне (в `.gitignore`) |
+| Снимки SQL-баз | `virtual_env/backups/<метка>/` (`ergoms db-backup`; `ergoms clean` не трогает) |
+| План ролей рабочих компаний | `virtual_env/access-plans/workspace-access.yaml` (локальный YAML, не в git; путь — `workspace_access_plan_path`) |
+
+## Владелец файлов (Linux)
+
+`logs/`, `core/client/dist` и `virtual_env/client-remotes` должны принадлежать владельцу корня проекта, не `root`. Имя пользователя **не** пиши в `chown`: бери uid/gid из `stat` корня через [`restore_project_ownership`](../../core/deployment/lifecycle/host/privilege.py). Сборка клиента сама возвращает владельца; юниты API/Celery/media ставят `User=` того же владельца.
+
+```bash
+# BAD
+sudo chown -R administrator:administrator logs core/client/dist
+
+# GOOD — владелец корня, без имени в команде
+# Python: restore_project_ownership(root, root / 'logs')
+# bash:   restore_project_ownership "$root" "$root/logs"
+```
+
+## Обязательно
+
+- `PIP_CACHE_DIR`, `POETRY_CACHE_DIR`, `npm_config_cache` → `virtual_env/cache/…` ([`ops.py`](../../core/deployment/lifecycle/host/ops.py), `commands.ps1` / `commands.sh`)
+- Certbot: только `virtual_env/python/bin/certbot` (pip в venv), не пакеты ОС
+- TLS: `--config-dir` / webroot под `virtual_env/packages/…`
+- Jupyter: `JUPYTER_DATA_DIR` / kernels в `virtual_env/jupyter/`
+- Temp install/geoip/extract: `virtual_env/cache/tmp/`; архивы portable runtime — `virtual_env/cache/downloads/`
+
+## Запрещено
+
+```python
+# BAD — кэш pip вне проекта
+subprocess.run([sys.executable, '-m', 'pip', 'install', 'pkg'])  # без PIP_CACHE_DIR
+
+# BAD — certbot из пакетов ОС
+subprocess.run(['apt-get', 'install', '-y', 'certbot'])
+
+# BAD — temp в системе
+tempfile.mkdtemp(prefix='ergo_')  # без dir= virtual_env/cache/tmp
+```
+
+```powershell
+# BAD
+$zip = Join-Path $env:TEMP 'nginx.zip'
+$nssm = "$env:ProgramData\ergo_ms\nssm"
+```
+
+```bash
+# BAD
+mktemp -d /tmp/ergo-npm.XXXXXX
+certbot certonly ...   # системный PATH
+```
+
+## Базовый пример
+
+```python
+from project_layout import cache_tmp_dir, ensure_dir, tool_cache_environ
+
+tmp = ensure_dir(cache_tmp_dir(root))
+env = {**os.environ, **tool_cache_environ(root)}
+```
+
+```bash
+certbot_bin="$root/virtual_env/python/bin/certbot"
+"$certbot_bin" certonly --config-dir "$root/virtual_env/packages/letsencrypt" ...
+```
+
+Тесты deployment могут использовать `%TEMP%` для изоляции прогона — не копируй это в install-скрипты.
+
+На Linux `ergoms install-cli` может создать симлинк `/usr/local/bin/ergoms` на `core/deployment/bin/ergoms`. Это регистрация CLI для `sudo`, не данные приложения. `uninstall-cli` снимает ссылку только если она указывает на этот проект.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Кратко | [`project-root-artifacts.mdc`](../../.cursor/rules/project-root-artifacts.mdc) |
+| npm workspace | [`npm-workspace.mdc`](../../.cursor/rules/npm-workspace.mdc) |
+| virtual_env | [`virtual-env.mdc`](../../.cursor/rules/virtual-env.mdc) |

@@ -114,6 +114,13 @@ LIB="{_DEPLOYMENT_DIR / 'linux' / 'lib'}"
 source "$LIB/core.sh"
 # shellcheck disable=SC1091
 source "$LIB/systemd.sh"
+stat() {{
+  case "$1:$2" in
+    -c:%U) printf '%s\\n' unit_user ;;
+    -c:%G) printf '%s\\n' unit_group ;;
+    *) command stat "$@" ;;
+  esac
+}}
 get_base_unit_definitions "{root}"
 printf '%s' "$API_UNIT"
 '''
@@ -125,8 +132,8 @@ printf '%s' "$API_UNIT"
             )
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             text = result.stdout
-            self.assertIn('\nUser=', text)
-            self.assertIn('\nGroup=', text)
+            self.assertIn('\nUser=unit_user\n', text)
+            self.assertIn('\nGroup=unit_group\n', text)
             self.assertIn('\nEnvironmentFile=', text)
             self.assertNotIn('administratorEnvironmentFile', text)
             self.assertNotRegex(text, r'User=\S+EnvironmentFile=')
@@ -135,6 +142,15 @@ printf '%s' "$API_UNIT"
         self.assertIn('Get-ErgoServiceName', self.services_ps1)
         self.assertIn('ergo_service_name redis', self.services_sh)
         self.assertIn('ergo_service_name nginx', self.services_sh)
+
+    def test_windows_install_skips_module_host_units(self) -> None:
+        start = self.services_ps1.index('function Install-Service')
+        end = self.services_ps1.index('function Install-AllServices')
+        body = self.services_ps1[start:end]
+        self.assertLess(
+            body.index('Get-ModuleHostServiceUnits'),
+            body.index('New-ServiceWrapper'),
+        )
 
 
 if __name__ == '__main__':

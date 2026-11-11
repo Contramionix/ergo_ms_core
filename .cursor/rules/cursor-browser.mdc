@@ -1,6 +1,6 @@
 ---
-description: Встроенный браузер Cursor — вход админом из env/mcp.env (ADMIN_LOGIN, ADMIN_PASSWORD), без пароля в чате
-alwaysApply: true
+description: Встроенный браузер Cursor, cursor-ide-browser, вход через #login из env/mcp.env, без пароля в чате
+alwaysApply: false
 ---
 
 # Встроенный браузер Cursor

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -64,7 +65,12 @@ def _require_fields(db_config: dict[str, Any], *fields: str) -> None:
         _fail(f"в секции БД не заданы поля: {', '.join(missing)}")
 
 
-def build_npx_args(db_config: dict[str, Any]) -> list[str]:
+def build_npx_args(db_config: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
+    """Аргументы npx и добавка к окружению процесса.
+
+    Пароль PostgreSQL идёт через PGPASSWORD, а не в адресе: аргументы процесса
+    печатают npm и сообщение об ошибке, а stderr MCP оседает в логах Cursor и Claude Code.
+    """
     engine = str(db_config.get('engine', 'postgresql')).strip().lower()
     if engine not in SUPPORTED_ENGINES:
         _fail(
@@ -76,18 +82,18 @@ def build_npx_args(db_config: dict[str, Any]) -> list[str]:
         _require_fields(db_config, 'user', 'password', 'host', 'name')
         port = db_config.get('port', 5432)
         user = quote(str(db_config['user']), safe='')
-        password = quote(str(db_config['password']), safe='')
         host = db_config['host']
         name = db_config['name']
-        uri = f'postgresql://{user}:{password}@{host}:{port}/{name}'
-        return ['-y', POSTGRES_PACKAGE, uri]
+        # Драйвер pg берёт пароль из PGPASSWORD, когда в адресе его нет.
+        uri = f'postgresql://{user}@{host}:{port}/{name}'
+        return ['-y', POSTGRES_PACKAGE, uri], {'PGPASSWORD': str(db_config['password'])}
 
     if engine == 'sqlite':
         _require_fields(db_config, 'name')
         db_path = Path(str(db_config['name']))
         if not db_path.is_absolute():
             db_path = (PROJECT_DIR / db_path).resolve()
-        return ['-y', MULTI_DB_PACKAGE, str(db_path)]
+        return ['-y', MULTI_DB_PACKAGE, str(db_path)], {}
 
     if engine == 'mysql':
         _require_fields(db_config, 'user', 'password', 'host', 'name')
@@ -101,7 +107,7 @@ def build_npx_args(db_config: dict[str, Any]) -> list[str]:
             '--database', str(db_config['name']),
             '--user', str(db_config['user']),
             '--password', str(db_config['password']),
-        ]
+        ], {}
 
     # mssql
     _require_fields(db_config, 'user', 'password', 'host', 'name')
@@ -115,22 +121,23 @@ def build_npx_args(db_config: dict[str, Any]) -> list[str]:
         '--database', str(db_config['name']),
         '--user', str(db_config['user']),
         '--password', str(db_config['password']),
-    ]
+    ], {}
 
 
 def main() -> None:
     db_name = sys.argv[1] if len(sys.argv) > 1 else 'default'
     db_config = load_section(db_name)
-    package_args = build_npx_args(db_config)
+    package_args, extra_env = build_npx_args(db_config)
 
     npx_executable = get_npx_executable()
     if not npx_executable:
         _fail('npx не найден в PATH. Установите Node.js и перезапустите терминал.')
 
     try:
-        subprocess.run([npx_executable, *package_args], check=True)
+        subprocess.run([npx_executable, *package_args], check=True, env={**os.environ, **extra_env})
     except subprocess.CalledProcessError as e:
-        print(f'ОШИБКА при запуске MCP сервера: {e}', file=sys.stderr)
+        # Текст исключения повторяет аргументы, а у MySQL и MSSQL там пароль.
+        print(f'ОШИБКА при запуске MCP сервера: код выхода {e.returncode}', file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print('\nMCP сервер остановлен', file=sys.stderr)

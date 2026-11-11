@@ -1,0 +1,70 @@
+---
+paths:
+  - "**/adp/**"
+  - "**/permissions.py"
+  - "**/*permission*"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Глобальный администратор
+
+**Назначенная роль «Администратор» и `is_superuser` (createsuperuser) эквивалентны по функционалу приложения.** Не проектируй и не пиши код, где один из них «сильнее» другого во время работы приложения.
+
+## Единая точка проверки (сервер)
+
+Только `PermissionService` в `core/api/src/core/cms/adp/services/permissions.py`:
+
+| Метод | Назначение |
+|-------|------------|
+| `PermissionService.is_admin(user)` | Глобальный админ — полный доступ к URL, модулям, меню |
+| `PermissionService.can_manage_users_as_global_admin(user)` | То же; управление пользователями, `IsGlobalAdmin` |
+| `PermissionService.can_access_admin_panel(user)` | Доступ к панели администратора — эквивалент `is_admin` |
+
+`can_manage_users_as_global_admin` и `is_admin` делегируют в `_is_global_admin()`: `is_superuser=True` **или** активная ADP-роль «Администратор» (`role_type == 'admin'`).
+
+На процессе модуля (`MODULE_AUTH_MODE=jwt_claims`) роль читается из JWT: ядро кладёт `is_admin` при логине, refresh и scoped-перевыпуске (`attach_platform_auth_claims`). Не спрашивай роль повторно из `cms_adp_*` модуля и не считай отказ HTTP-моста «обычным пользователем», если в токене уже есть `is_admin=true`.
+
+```python
+# ❌ BAD — разная логика для суперюзера и назначенного админа
+if user.is_superuser:
+    ...
+elif user.is_staff:
+    ...
+
+# ✅ GOOD
+from src.core.cms.adp.services.permissions import PermissionService
+if PermissionService.is_admin(user):
+    ...
+```
+
+**Запрещено** для проверки глобального админа в API и модулях: прямые `user.is_superuser`, `user.is_staff`, сравнение имён ролей вручную.
+
+**Допустимо** `is_superuser` только: первичная настройка (`createsuperuser`), сигнал синхронизации роли, команды Django для миграции данных — не в бизнес-логике доступа.
+
+## Синхронизация в БД (единая сущность)
+
+Роль «Администратор» (ADP, `role_type == 'admin'`) и Django admin (`is_staff` + `is_superuser`) **всегда синхронизированы** через `_sync_django_admin_flags`:
+
+| Механизм | Поведение |
+|----------|-----------|
+| `createsuperuser` | `is_superuser=True`, `is_staff=True`; сигнал назначает роль «Администратор» |
+| Назначение роли «Администратор» (или любой admin-роли) | `is_superuser=True`, `is_staff=True` |
+| Назначение роли «Пользователь» | `is_superuser=False`, `is_staff=False` (нельзя снять у последнего админа; с себя — можно, если есть другой админ) |
+| Старые суперюзеры без роли | `ergoms api assign_superuser_admin_roles` |
+
+Флаги в `auth_user` и активная ADP-роль **не расходятся**; права в приложении определяются через `PermissionService.is_admin()`.
+
+## Клиент
+
+- Глобальный админ: `requiresGlobalAdmin` в маршрутах, `checkGlobalAdminAccess()` — не дублировать проверку через JWT-поля `is_superuser` / `is_staff` (их нет в клиентском контракте).
+- `permission-rules.js` — только UX; сервер обязан проверять через `PermissionService`.
+- Если отказ не должен отличаться от несуществующего адреса — `meta.notFoundIfDenied`, не карточка «нет доступа». [`route-concealment.mdc`](../../.cursor/rules/route-concealment.mdc)
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Безопасность auth/API | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| Права модулей | [`modules.mdc`](../../.cursor/rules/modules.mdc) → `adp.permission_check` |
+| UX маршрутов | [`permission_rules.mdc`](../../.cursor/rules/permission_rules.mdc) |
+| Эмуляция 404 | [`route-concealment.mdc`](../../.cursor/rules/route-concealment.mdc) |

@@ -2,9 +2,12 @@
 sections:
 - id: usage
   title: Utilisation
+  about: appel des commandes et sections d'aide
   static_lines:
   - ergoms <commande> [arguments]
-  - ergoms help                  — aide du noyau
+  - ergoms help                  — sections de l'aide
+  - ergoms help <section>        — commandes de la section
+  - ergoms help all              — liste complète des commandes
   - ergoms help modules          — liste des modules avec commandes ergoms
   - ergoms help module <nom>     — aide du module
   - ergoms <nom_module>:<commande> [arguments] — appeler une commande de module
@@ -12,6 +15,7 @@ sections:
     -3.12 core/deployment/lifecycle/runner.py --list'
 - id: builtin_services
   title: Services OS (intégrés)
+  about: installation et démarrage groupé des services
   note: Nécessitent les droits administrateur (Windows) ou root/sudo (Linux). Pour le développement, start-all suffit.
   commands:
   - name: install
@@ -56,6 +60,7 @@ sections:
     summary: Retirer le lien /usr/local/bin/ergoms ; les fichiers dans bin restent
 - id: development
   title: Développement local
+  about: API, client et tâches de fond en local
   commands:
   - name: dev
     summary: Démarrer l'API avec préchauffage des caches (mode depuis ERGO_ENV)
@@ -71,8 +76,8 @@ sections:
   - name: start-media
     summary: Media API
   - name: start-worker
-    invoke: ergoms start-worker [--worker=<nom>] [--module=<name>]
-    summary: Worker Celery (--module écoute toutes les files du module)
+    invoke: ergoms start-worker [--worker=<nom>] [--module=<name> [--worker=<id>]]
+    summary: Worker Celery. Avec --module, le worker partagé du module et chaque worker nommé de celery_workers.yaml; avec les deux options, un seul worker du module
   - name: start-beat
     invoke: ergoms start-beat [--module=<name>]
     summary: Celery beat (noyau, ou un module avec --module)
@@ -83,7 +88,8 @@ sections:
   - name: stop-jupyter-dev
     summary: Stub d'arrêt de JupyterLab (le processus se termine avec le terminal)
   - name: stop-worker
-    summary: Arrêter tous les Celery workers
+    invoke: ergoms stop-worker [--module=<name> [--worker=<id>]]
+    summary: Arrêter les workers Celery. Sans arguments — tous sur l'hôte; --module — ceux du module; --worker — un seul
   - name: stop-beat
     summary: Arrêter Celery beat
   - name: sync-logs-services
@@ -100,13 +106,20 @@ sections:
     invoke: ergoms resource-usage [--json] [-w] [--interval N]
     summary: Consommation RAM/CPU des processus ERGO MS sur l'hôte
   - name: celery-balance
-    invoke: ergoms celery-balance [--dry-run] [--watch] [--json]
+    invoke: ergoms celery-balance [--dry-run] [--watch] [--json] [--cluster]
     summary: Budget et concurrence Celery (observe / recommend / auto)
+  - name: celery-requeue
+    invoke: ergoms celery-requeue
+    summary: Remettre dans la file les tâches Celery dont le worker ne les détient plus
+  - name: celery-parked
+    invoke: ergoms celery-parked [--resume <id>… | --drop <id>…] [--all] [--module=<name>] [--json]
+    summary: "Tâches de modules mises en attente après redémarrage du worker : liste, --resume, --drop (task_restart.yaml)"
   - name: loadtest
     invoke: ergoms loadtest [--profile …] [--isolated-db|--docker-isolated] | --find-limit … | --cleanup-users
     summary: Test de charge API/pages (Locust), find-limit, isolation BDD ou suppression lt_*
 - id: docker
   title: Docker Compose
+  about: conteneurs et workers du cluster
   note: Variables DOCKER_* et profiles — section Docker dans .env.example. Ports — API_PORT, CLIENT_PORT, etc. BD — databases.yaml.
   commands:
   - name: docker-init
@@ -149,8 +162,17 @@ sections:
     summary: Régénérer compose depuis celery_workers.yaml
   - name: docker-gen-modules
     summary: Régénérer compose depuis MICROSERVICE_MODULES (MODULE_RUNTIME=microservice)
+  - name: docker-registry
+    summary: Registre d'images local sur DOCKER_SWARM_REGISTRY, uniquement pour les nœuds du cluster
+  - name: docker-swarm-push
+    summary: Construire la cible worker de l'image Python et l'envoyer au registre du cluster
+  - name: docker-swarm-deploy
+    summary: Démarrer l'agent de budget et le worker Celery sur les nœuds Swarm
+  - name: docker-swarm-down
+    summary: Retirer la pile des workers Swarm
 - id: dependencies
   title: Dépendances et base de données
+  about: dépendances, migrations et configuration initiale
   commands:
   - name: setup
     summary: Configuration initiale complète (git, venv, poetry, npm, migrate, static)
@@ -190,11 +212,12 @@ sections:
   - name: update-all
     summary: Mettre à jour les dépendances Python et npm (noyau et modules)
   - name: reinstall
-    summary: Réinstaller les dépendances (poetry install --sync, npm ci)
+    summary: Réinstaller les dépendances (poetry install --sync et npm run install:all)
   - name: deps
     summary: Rapport des dépendances du projet
 - id: build
   title: Compilation
+  about: compilation du client et statiques du serveur
   commands:
   - name: client-build
     summary: Compiler le client selon le rôle de l'hôte ; avec nginx, régénère la config et reload
@@ -216,6 +239,7 @@ sections:
     summary: Collecter les fichiers statiques Django
 - id: cache_env
   title: Caches et configuration
+  about: caches, environnement et processus locaux
   commands:
   - name: warmup-caches
     summary: Préchauffer les caches du noyau (apps, celery, modules_env)
@@ -261,6 +285,7 @@ sections:
     summary: Compiler les catalogues .po de l'API en .mo
 - id: maintenance
   title: Maintenance
+  about: nettoyage, contrôles et mode maintenance
   commands:
   - name: clean
     summary: Supprimer les dépendances et static (media est conservé)
@@ -290,18 +315,11 @@ sections:
     summary: "Référence des niveaux ERGO_SECURITY (étape 2 : clés absentes au runtime ; n'écrit pas .env)"
   - name: security-check
     summary: Rapport de conformité au niveau de sécurité (étape 2)
-  - name: deployment-test
-    invoke: ergoms deployment-test
-    summary: Tests unitaires de déploiement (docker_runtime, ergo_modes, env_resolvers, recipes, nginx render) sans démon
-      Docker
   - name: deployment-scenario-test
     invoke: ergoms deployment-scenario-test
     summary: Scénarios isolés hôte et Docker (ports et répertoires séparés ; n'écrit pas le .env du dépôt)
-  - name: test_system
-    invoke: ergoms test_system [--with-scenario] [--spec host_sqlite_direct]
-    summary: Tests unitaires de déploiement sous Windows et Linux ; --with-scenario lance un spec isolé sans installer NSSM/systemd
   - name: system-test
-    invoke: ergoms system-test [--suite unit|install|commands|scenarios|security|performance|browser|os-services|all] [--launch docker|host|os-services] [--spec host_sqlite_direct]
+    invoke: ergoms system-test [--suite unit|install|commands|scenarios|security|performance|browser|os-services|all] [--launch docker|host|os-services] [--spec host_sqlite_direct] [--strict]
     summary: Tests système isolés depuis zéro (unit, installation, commandes, scénarios, sécurité, vitesse, navigateur, services OS)
 
   - name: ps1-encoding-check
@@ -315,8 +333,22 @@ sections:
     summary: Rapport des limites de téléversement (MEDIA_UPLOAD_MAX_SIZE, direct-upload, nginx client_max_body_size)
   - name: test-smtp
     summary: Vérifier SMTP et envoyer un e-mail de test
+  - name: lock-check
+    invoke: ergoms lock-check
+    summary: Vérifier que les paquets des modules ne sont pas entrés dans le poetry.lock et le package-lock.json du noyau
+  - name: npm-lock-refresh
+    summary: Reconstruire le package-lock.json du noyau après un changement de dépendances dans virtual_env/npm/package.json
+  - name: npm-lock-sanitize
+    summary: Retirer du package-lock.json du noyau les entrées de modules apparues par accident
+  - name: ci
+    invoke: ergoms ci
+    summary: Contrôles rapides avant une demande de fusion (locks, règles du noyau, tests unitaires de déploiement, lint client, tests client des modules)
+  - name: ci-nightly
+    invoke: ergoms ci-nightly
+    summary: Contrôles rapides et passage nocturne strict (SQLite, Docker, sécurité, navigateur). Un contrôle obligatoire ignoré est un échec
 - id: service_aliases
-  title: Services OS (alias de commands.conf)
+  title: Services OS individuels
+  about: démarrage et état d'un service
   note: Pour une gestion complète, ergoms start, stop, restart et status suffisent.
   commands:
   - name: start-api-service
@@ -359,19 +391,12 @@ sections:
     summary: Redémarrer le service Media API
   - name: status-media-service
     summary: État du service Media API
-  - name: start-all-services
-    summary: Démarrer tous les services individuellement
-  - name: stop-all-services
-    summary: Arrêter tous les services
-  - name: restart-all-services
-    summary: Redémarrer tous les services
-  - name: status-all-services
-    summary: État de tous les services
 - id: deploy
   title: Déploiement
+  about: déploiement API et client avec copie des bases
   commands:
   - name: deploy-api
-    summary: Mettre à jour les sous-modules API, dépendances, migrations, static
+    summary: Mettre à jour les sous-modules API, écrire les versions, copier les bases, appliquer les migrations et collecter static
   - name: deploy-client
     summary: Mettre à jour le sous-module client, dépendances, compilation
   - name: deploy-api-dev
@@ -379,9 +404,10 @@ sections:
   - name: deploy-client-dev
     summary: Déployer le client et démarrer le serveur de développement
   - name: deploy-all
-    summary: Déploiement complet de l'API et du client
+    summary: Déploiement complet de l'API et du client. Avant les migrations — copie des bases ; versions dans logs/deploy-revision.txt
 - id: nginx
   title: Nginx (optionnel)
+  about: proxy inverse
   note: Automatique dans setup-full si NGINX_ENABLED=true. L'installation nécessite les droits administrateur ; status-nginx
     et test-nginx non.
   commands:
@@ -403,6 +429,7 @@ sections:
     summary: Vérifier la configuration nginx
 - id: redis
   title: Redis (optionnel)
+  about: courtier de files
   note: Portable sous virtual_env/packages/redis. Automatique dans setup-full si ERGO_BROKER=redis.
   commands:
   - name: install-redis
@@ -421,6 +448,7 @@ sections:
     summary: Vérification via redis-cli ping
 - id: meilisearch
   title: Meilisearch (recherche BM25)
+  about: recherche plein texte
   note: Portable sous virtual_env/packages/meilisearch. Automatique dans setup-full si ERGO_SEARCH_ENABLED=true ; service OS via install-services. Voir env/search.env.example.
   commands:
   - name: install-meilisearch
@@ -451,11 +479,17 @@ sections:
     summary: Publier les paquets d'aide de ce processus dans media_api (knowledge/)
 - id: packages
   title: Paquets portables
+  about: programmes du registre d'installation
   note: 'Registre sous virtual_env/packages : noyau (core_packages.yaml) et modules (packages.yaml). Services redis/nginx
     — commandes install-* séparées.'
   commands:
   - name: package-list
     summary: Lister les paquets du registre et l'état d'installation
+  - name: runtime-check
+    summary: Vérifier les versions et les liens de runtime_requirements.yaml
+  - name: runtime-install-tools
+    invoke: ergoms runtime-install-tools [--include-optional]
+    summary: Installer les outils obligatoires via le registre commun des paquets
   - name: package-status
     invoke: ergoms package-status [name]
     summary: État détaillé d'un paquet ou de tous
@@ -467,15 +501,29 @@ sections:
     summary: Supprimer le répertoire du paquet (--purge-extra supprime aussi extra_dirs)
 - id: huggingface
   title: Instantanés Hugging Face
+  about: modèles locaux
   note: 'Registre sous virtual_env/trained_models/huggingface : modules/*/huggingface_models.yaml. Ce n''est pas ollama pull ni packages.yaml.'
   commands:
   - name: huggingface-models
     summary: Liste des instantanés huggingface_models.yaml et état sur disque
+  - name: runtime-models
+    invoke: ergoms runtime-models [--json]
+    summary: Index commun des modèles déclarés et des liens locaux vérifiés
+  - name: runtime-model-check
+    invoke: ergoms runtime-model-check [--json]
+    summary: Vérifier les modèles obligatoires sans téléchargement et mettre à jour l'index fichier
+  - name: runtime-model-install
+    invoke: ergoms runtime-model-install [--include-optional] [--provider NAME --model NAME]
+    summary: Installer les modèles avec les chargeurs existants ; par défaut, uniquement les obligatoires
+  - name: runtime-model-resolve
+    invoke: ergoms runtime-model-resolve --provider NAME --model NAME [--allow-download] [--json]
+    summary: Obtenir un lien local vérifié ; le téléchargement n'est permis qu'explicitement
   - name: pull-huggingface-models
     invoke: ergoms pull-huggingface-models [--force] [--repo org/name] [--include-optional]
     summary: Télécharger les instantanés obligatoires (automatique dans setup-full). Ignore ceux déjà présents dans trained_models
 - id: postgres
   title: PostgreSQL (portable)
+  about: base PostgreSQL intégrée
   note: Automatique dans setup-full si ERGO_DB=portable_postgres. Répertoire virtual_env/packages/postgres. install-services enregistre aussi le service.
   commands:
   - name: install-postgres
@@ -499,6 +547,7 @@ sections:
       dans yaml'
 - id: extensions
   title: Extensions VS Code
+  about: extensions de l'éditeur
   commands:
   - name: install-extensions
     summary: Installer les extensions de la liste du projet
@@ -508,6 +557,7 @@ sections:
     summary: Désinstaller les extensions du projet
 - id: submodules
   title: Sous-modules Git
+  about: mise à jour des dépôts imbriqués
   commands:
   - name: update-submodules
     summary: Mettre à jour les sous-modules du noyau et basculer sur dev
@@ -515,6 +565,7 @@ sections:
     summary: Mettre à jour les sous-modules des modules depuis .gitmodules
 - id: proxy
   title: Proxies
+  about: appels Django, Poetry, npm et Media API
   static_lines:
   - ergoms api <commande_django> [arguments]    — commandes Django
   - ergoms poetry <arguments>                   — Poetry
@@ -522,6 +573,7 @@ sections:
   - ergoms media_api <arguments>                — Media API manage.py
 - id: mcp_cursor
   title: MCP (Cursor)
+  about: serveurs d'outils Cursor
   note: 'Prise en charge MCP — extension ERGO MS Module Cursor MCP après ergoms install-extensions. Chemin principal —
     API registerServer Cursor (mcp.json non réécrit) ; secours — mcp.json uniquement en cas de changement. Activation —
     ERGO MS : Enable MCP Servers.'
@@ -530,17 +582,20 @@ platform_sections:
   windows:
   - id: nginx_service
     title: Nginx en tant que service Windows
+    about: service nginx sous Windows
     commands:
     - name: install-nginx-service
       summary: Installer nginx en tant que service Windows (démarrage automatique)
   - id: redis_service
     title: Redis en tant que service Windows
+    about: service redis sous Windows
     commands:
     - name: install-redis-service
       summary: Installer Redis en tant que service Windows (démarrage automatique)
   linux:
   - id: tls
     title: TLS (Let's Encrypt, Linux uniquement)
+    about: certificat TLS pour Linux
     note: Nécessite root/sudo ; status-tls n'a pas besoin de root.
     commands:
     - name: install-tls
@@ -551,6 +606,7 @@ platform_sections:
       summary: Validité du certificat et chemins
   - id: redis_service
     title: Redis en tant que service systemd
+    about: service redis sous systemd
     commands:
     - name: install-redis-service
       summary: Installer Redis en tant qu'unité systemd

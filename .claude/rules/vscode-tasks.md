@@ -1,0 +1,141 @@
+---
+paths:
+  - "**/.vscode/tasks.json"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Задачи VS Code / Cursor
+
+Задачи запускают **только** команды `ergoms`.
+
+- **Ядро** — [`.vscode/tasks.json`](../../.vscode/tasks.json).
+- **Модули** — hook `modules/<name>/vscode.tasks.yaml` (тип `ergo-module`). Часть модульности системы: не раздувай монолит ядра — [`module-vscode-tasks.mdc`](../../.cursor/rules/module-vscode-tasks.mdc).
+
+Расширения VS Code — тоже команда ergoms: `ergoms install-extensions`, а не `node .vscode/scripts/install-extensions.js` и не `npm run install-extensions` ([`npm-workspace.mdc`](../../.cursor/rules/npm-workspace.mdc)). В существующих задачах ещё встречается прямой вызов `node` — при следующей правке файла приводи такие строки к команде ergoms.
+
+## Кратко
+
+- Команда — `ergoms …`, не `python manage.py`, не прямой `pip` / `poetry`.
+- В `PATH` всегда есть `core/deployment/bin` (Windows и Linux).
+- У **каждой** задачи (shell, multi-terminal, композиция с `dependsOn`, ergo-module) есть `detail` на русском.
+- `label` — короткий стабильный идентификатор (как у соседей: `Docker: Up`, `Logs: All Services`).
+- Внутренние шаги композиции — `"hide": true`; в Run Task видна только точка входа.
+- `cwd`: `${workspaceFolder}`; `problemMatcher`: `[]`.
+- Модульные задачи — только в `vscode.tasks.yaml` модуля ([`module-vscode-tasks.mdc`](../../.cursor/rules/module-vscode-tasks.mdc)), не в корневом `tasks.json`.
+
+## Обязательные поля любой задачи
+
+| Поле | Правило |
+|------|---------|
+| `label` | Уникальное имя; стиль как у существующих (`Docker: Up`, `Logs: All Services`) |
+| `detail` | **Обязателен.** 1 предложение по-русски сразу после `label`; видно в Run Task под названием |
+
+Без `detail` задачу не добавляй и не оставляй после правки.
+
+## Обязательные поля shell-задачи
+
+| Поле | Правило |
+|------|---------|
+| `command` | `ergoms <команда> [аргументы]` |
+| `options.cwd` | `${workspaceFolder}` |
+| `windows` / `linux` | `PATH` с `core/deployment/bin`; shell: `cmd.exe` `/d /c` и `/bin/bash` `-lc` |
+| `presentation` | Обычно `reveal: always`, `panel: shared` или `new` |
+| `problemMatcher` | `[]` |
+
+## `detail`
+
+Пиши так, чтобы по подписи было ясно **что делает задача**, без открытия JSON. Поле нужно и у скрытых (`hide: true`) задач — эталон для агента и человека.
+
+Стиль:
+1. Начинай с глагола действия: «Запустить…», «Остановить…», «Установить…», «Перезапустить…».
+2. Сразу смысл для человека, не внутренний пайплайн и не стрелки шагов.
+3. Если задача поднимает несколько сервисов — перечисли их через запятую после двоеточия.
+4. Не копируй `label`, не пиши только имя `ergoms`-команды.
+
+- хорошо: «Запустить все службы разработки: прогрев кэшей, Redis, Meilisearch, Jupyter, API, Media API, Celery и клиент»
+- хорошо: «Установить portable PostgreSQL (или пропустить, если есть системная служба)»
+- плохо: «Прогрев кэшей, затем Redis → API/backend → клиент (по умолчанию)» — шаги вместо смысла
+- плохо: пусто, копия `label`, или только имя команды (`ergoms docker-up`)
+
+## Композиции и скрытые задачи
+
+- Точка входа (`Start All Services`, `Logs: All Services`) — **без** `hide`, с понятным `detail`.
+- Зависимости (`Cache Warmup`, `Services`, `API`, …) — `"hide": true`.
+- Порядок: `dependsOrder` + `dependsOn`; параллель — `"parallel"`, цепочка — `"sequence"`.
+- Несколько однотипных процессов — `type: multi-terminal` и yaml-источник (`celery_workers.yaml`, runtime yaml), не дублируй N одинаковых shell-задач.
+
+## Запрещено
+
+```json
+// BAD — нет detail (любой тип задачи)
+{
+  "label": "Docker: Up",
+  "type": "shell",
+  "command": "ergoms docker-up"
+}
+```
+
+```json
+// BAD — нет detail, нет PATH к ergoms, прямой manage.py
+{
+  "label": "Migrate",
+  "type": "shell",
+  "command": "python manage.py migrate"
+}
+```
+
+```json
+// BAD — внутренняя зависимость видна в Run Task
+{
+  "label": "API",
+  "command": "ergoms dev"
+}
+```
+
+```json
+// GOOD — фрагмент эталона
+{
+  "label": "Docker: Up",
+  "detail": "Поднять стек Docker Compose",
+  "type": "shell",
+  "command": "ergoms docker-up",
+  "options": { "cwd": "${workspaceFolder}" },
+  "windows": {
+    "options": {
+      "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] },
+      "env": {
+        "PATH": "${workspaceFolder}\\core\\deployment\\bin;${env:PATH}"
+      }
+    }
+  },
+  "linux": {
+    "options": {
+      "shell": { "executable": "/bin/bash", "args": ["-lc"] },
+      "env": {
+        "PATH": "${workspaceFolder}/core/deployment/bin:${env:PATH}"
+      }
+    }
+  },
+  "presentation": { "echo": true, "reveal": "always", "panel": "shared" },
+  "problemMatcher": []
+}
+```
+
+## Чеклист перед сохранением
+
+1. У **всех** задач в файле есть `detail` на русском (не только у новых).
+2. Команда через `ergoms`.
+3. `PATH` к `core/deployment/bin` на Windows и Linux.
+4. Внутренние шаги с `hide: true`; пользовательская задача — без hide.
+5. Не ломай `Start All Services` / multi-terminal без нужды — сверяйся с соседями в файле.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Модульные задачи (hook модульности) | [`module-vscode-tasks.mdc`](../../.cursor/rules/module-vscode-tasks.mdc) |
+| Только ergoms | [`no-direct-manage-py.mdc`](../../.cursor/rules/no-direct-manage-py.mdc) |
+| Структура модулей | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Справочник команд | [`.docs/cli.md`](../../.docs/cli.md) |
+| Docker-задачи | [`docker.mdc`](../../.cursor/rules/docker.mdc) |
+| Redis / nginx | [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc) |

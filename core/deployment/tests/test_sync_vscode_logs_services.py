@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 
@@ -14,6 +15,11 @@ from sync_vscode_logs_services import (  # noqa: E402
 
 
 class SyncVscodeLogsMicroserviceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        prefix = patch.dict('os.environ', {'ERGO_SERVICE_PREFIX': 'ergo_ms'})
+        prefix.start()
+        self.addCleanup(prefix.stop)
+
     def _write_module_host(self, root: Path, name: str, *, with_beat: bool) -> None:
         module_dir = root / 'modules' / name
         (module_dir / 'api').mkdir(parents=True)

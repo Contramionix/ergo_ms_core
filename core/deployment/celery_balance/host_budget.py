@@ -57,6 +57,7 @@ class HostBudget:
     gpu: GpuSnapshot
     source: str
     samples: tuple[ProcessSample, ...] = field(default=(), repr=False)
+    egress_ok: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -95,6 +96,7 @@ class HostBudget:
                 ],
             },
             'source': self.source,
+            'egress_ok': self.egress_ok,
         }
 
 

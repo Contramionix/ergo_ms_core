@@ -119,7 +119,7 @@ export function collectMissingCoreInstallSpecs(npmRoot, nodeModules) {
     if (workspaceNames.has(name)) {
       continue
     }
-    if (fs.existsSync(packageDir(nodeModules, name))) {
+    if (fs.existsSync(path.join(packageDir(nodeModules, name), 'package.json'))) {
       continue
     }
     const version = versions.get(name)
@@ -176,34 +176,52 @@ function packageDir(nodeModulesDir, name) {
   return path.join(nodeModulesDir, name)
 }
 
-function readInstalledDepNames(nodeModulesDir, name) {
-  const pkgFile = path.join(packageDir(nodeModulesDir, name), 'package.json')
+function readInstalledDepNames(directory) {
+  const pkgFile = path.join(directory, 'package.json')
   if (!fs.existsSync(pkgFile)) {
     return []
   }
-  try {
-    return depNamesFromPackage(readPackageJson(pkgFile))
-  } catch {
-    return []
+  return depNamesFromPackage(readPackageJson(pkgFile))
+}
+
+function resolveInstalledDependency(nodeModulesDir, fromDirectory, name) {
+  let directory = fromDirectory
+  while (directory !== nodeModulesDir) {
+    if (path.basename(directory) !== 'node_modules') {
+      const candidate = path.join(directory, 'node_modules', name)
+      if (fs.existsSync(path.join(candidate, 'package.json'))) {
+        return candidate
+      }
+    }
+    directory = path.dirname(directory)
   }
+  const candidate = packageDir(nodeModulesDir, name)
+  return fs.existsSync(path.join(candidate, 'package.json')) ? candidate : null
 }
 
 export function collectReachableNames(nodeModulesDir, keepDirect) {
+  const root = path.resolve(nodeModulesDir)
   const reachable = new Set()
-  const queue = [...keepDirect]
+  const visited = new Set()
+  const queue = [...keepDirect].filter(Boolean).map((name) => packageDir(root, name))
 
   while (queue.length > 0) {
-    const name = queue.pop()
-    if (!name || reachable.has(name)) {
+    const directory = path.resolve(queue.pop())
+    const relative = path.relative(root, directory)
+    if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`)
+      || path.isAbsolute(relative) || visited.has(directory)) {
       continue
     }
-    if (!fs.existsSync(packageDir(nodeModulesDir, name))) {
+    if (!fs.existsSync(directory)) {
       continue
     }
-    reachable.add(name)
-    for (const dep of readInstalledDepNames(nodeModulesDir, name)) {
-      if (!reachable.has(dep)) {
-        queue.push(dep)
+    visited.add(directory)
+    const parts = relative.split(path.sep)
+    reachable.add(parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0])
+    for (const dep of readInstalledDepNames(directory)) {
+      const candidate = resolveInstalledDependency(root, directory, dep)
+      if (candidate && !visited.has(candidate)) {
+        queue.push(candidate)
       }
     }
   }
@@ -326,7 +344,7 @@ export function isCoreTreeCurrent({ npmRoot, nodeModules }) {
   }
 
   for (const name of collectCoreDirectNames(npmRoot)) {
-    if (!fs.existsSync(packageDir(nodeModules, name))) {
+    if (!fs.existsSync(path.join(packageDir(nodeModules, name), 'package.json'))) {
       return false
     }
   }

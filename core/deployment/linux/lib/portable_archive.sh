@@ -21,7 +21,8 @@ ergoms_console_from_root() {
     return 0
   fi
   echo "[$key]" >&2
-  return 1
+  # До создания project venv отсутствие рендера не должно прерывать bootstrap с set -e.
+  return 0
 }
 
 cached_runtime_archive_ok() {

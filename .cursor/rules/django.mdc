@@ -43,6 +43,8 @@ Pre-flight: `ergoms api verify_user_schema`. Отстающая БД (ещё б�
 
 Самостоятельное изменение профиля — `API_USER_PROFILE_SELF_EDIT_ENABLED`; заявки на изменение — `UserProfileChangeRequest`.
 
+Дата рождения хранится в `UserProfile.birth_date`. Возраст в модулях считают из неё и не заводят свой ввод ([`user-birth-date.mdc`](user-birth-date.mdc)).
+
 ## Realtime (ASGI)
 
 API для разработки запускается через ASGI (Channels). WebSocket-маршруты собираются в `core/api/src/config/asgi.py`. Новый consumer — наследник `JwtMessageAuthConsumer` ([`realtime.mdc`](realtime.mdc)).
@@ -67,3 +69,4 @@ admin.site.register(MyModel)
 | WebSocket, polling | [`realtime.mdc`](realtime.mdc) |
 | Channel layer, Redis | [`deployment-infra.mdc`](deployment-infra.mdc) |
 | Глобальный админ | [`global-admin.mdc`](global-admin.mdc) |
+| Дата рождения и возраст | [`user-birth-date.mdc`](user-birth-date.mdc) |

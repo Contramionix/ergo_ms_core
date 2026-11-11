@@ -1,0 +1,42 @@
+---
+description: UI ядра — Карточка файла — FileCard
+alwaysApply: false
+---
+
+## Карточка файла — FileCard
+
+Компонент: `@/components/FileCard.vue`.
+
+Показ одного вложения: имя, мета, кнопка скачать/открыть. Список загрузок и `mediaApiClient` остаются у родителя. Не копируй локальную карточку файла в модуле.
+
+```vue
+<script setup>
+import FileCard from '@/components/FileCard.vue'
+</script>
+
+<template>
+  <FileCard
+    file-type="docx"
+    :file-name="file.name"
+    :size-bytes="file.size"
+    @download="onDownload"
+  />
+</template>
+```
+
+Тексты по умолчанию — `components.fileCard.*`. Свою подпись кнопки — `download-label`.
+
+| Prop | Когда |
+|------|-------|
+| `fileName` / `fileUrl` | имя; из URL, если имя пусто |
+| `fileType` | иконка по типу (`docx`; иначе Lucide `FileText`) |
+| `icon` | явный URL иконки |
+| `meta` | готовая строка метаданных (иначе author / size / date) |
+| `authorName` / `sizeBytes` / `uploadedAt` | сборка meta, если `meta` пуст |
+| `downloadLabel` | подпись кнопки; иначе `components.fileCard.download` |
+| `bordered` | рамка; `false` — строка внутри зоны загрузки |
+| `actions` | `download-button` (по умолчанию) или `icons` (`IconActionButton`) |
+| `removable` | кнопка удаления в режиме `icons` |
+| `#actions` | своя кнопка вместо стандартной |
+
+События: `download`, `remove`.

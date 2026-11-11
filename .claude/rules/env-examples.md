@@ -1,0 +1,98 @@
+---
+paths:
+  - "**/.env*.example"
+  - "env/*.example"
+  - "databases.yaml.example"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Шаблоны окружения
+
+Корневой сценарий — **не** четыре полных копии `.env`. Режимы задаются в корне, детали инфраструктуры — во фрагментах `env/`, подключения — в `databases.yaml`.
+
+## Кратко
+
+| Файл | Назначение |
+|------|------------|
+| [`.env.example`](../../.env.example) | общие настройки + `ERGO_*` режимы |
+| [`env/nginx.env.example`](../../env/nginx.env.example) | `NGINX_*`, TLS (`ERGO_TLS_*` / `ERGO_SSL_*`) |
+| [`env/docker.env.example`](../../env/docker.env.example) | `DOCKER_*` |
+| [`env/jupyter.env.example`](../../env/jupyter.env.example) | `API_JUPYTER_*` |
+| [`env/smtp.env.example`](../../env/smtp.env.example) | `EMAIL_*` (SMTP) |
+| [`env/logging.env.example`](../../env/logging.env.example) | логи, клиентский лог/мониторинг, аудит |
+| [`env/mcp.env.example`](../../env/mcp.env.example) | `ADMIN_LOGIN` / `ADMIN_PASSWORD` для MCP и встроенного браузера Cursor |
+| [`env/kaggle.env.example`](../../env/kaggle.env.example) | `KAGGLE_USERNAME` / `KAGGLE_KEY` для скачивания датасетов Kaggle |
+| [`env/media.env.example`](../../env/media.env.example) | `MEDIA_API_*`, пути и лимиты загрузок |
+| [`env/realtime.env.example`](../../env/realtime.env.example) | `REALTIME_*`, channel layer |
+| [`env/cache.env.example`](../../env/cache.env.example) | `API_CACHE_*`, TTL меню/прав/уведомлений |
+| [`env/celery.env.example`](../../env/celery.env.example) | `CELERY_BROKER_*`, `CELERY_BALANCE*` |
+| [`env/postgres.env.example`](../../env/postgres.env.example) | служба portable Postgres, knobs `postgresql.conf` |
+| [`env/search.env.example`](../../env/search.env.example) | Meilisearch / BM25 (`MEILI_*`); режим `ERGO_SEARCH_ENABLED` — в корне |
+| [`env/modules.env.example`](../../env/modules.env.example) | microservice / ModuleBridge (`MICROSERVICE_MODULES`, `BRIDGE_*`, `HOST_SERVICES`, `MODULE_PROCESS_PROFILE`) |
+| [`databases.yaml.example`](../../databases.yaml.example) | SQL + секция `redis` |
+| [`media_zones.yaml.example`](../../media_zones.yaml.example) | пример зон media; рабочий `media_zones.yaml` только на машине, как `databases.yaml` |
+| [`celery_workers.yaml.example`](../../celery_workers.yaml.example) | процессы Celery worker |
+
+- Загрузка: `.env` → `env/*.env` → `modules/**/.env` (модули перекрывают).
+- Новый **общий** ключ — в `.env.example`; ключ только для фрагмента — в соответствующем `env/*.example`.
+- Модульные `modules/*/.env.example` — отдельный набор, не смешивать с корневыми.
+
+## Режимы
+
+```env
+ERGO_RUNTIME=host|docker
+ERGO_PROXY=none|nginx
+ERGO_BROKER=local|redis
+ERGO_DB=sqlite|postgres|portable_postgres|mysql|mssql
+ERGO_JUPYTER=none|auto|local|lan|nginx
+ERGO_EMAIL=none|smtp
+ERGO_MEDIA=local|remote
+ERGO_REALTIME=websocket|sse|http_polling
+ERGO_SEARCH_ENABLED=true|false
+ERGO_ENV=development|production
+MODULE_RUNTIME=monolith|microservice
+HOST_PROFILE=full|core|modules|auto
+```
+
+Детали microservice / ModuleBridge — [`env/modules.env.example`](../../env/modules.env.example), не корневой `.env`.
+Явные `REDIS_ENABLED` / `NGINX_ENABLED` / `DOCKER_ENABLED` / `MEDIA_ACCESS_MODE` / `REALTIME_TRANSPORT` / `*_DEPLOY_TYPE` (если заданы) имеют приоритет над `ERGO_*` — legacy.
+
+## Обязательно
+
+1. После добавления переменной обнови нужный example (корень или фрагмент).
+2. Connection Redis — только `databases.yaml` → `redis`, не дублируй `REDIS_HOST` в корневых шаблонах.
+3. Connection SQL (host/port/user/password) — только `databases.yaml`; служба и knobs portable Postgres — только `env/postgres.env` ([`postgres-portable.mdc`](../../.cursor/rules/postgres-portable.mdc)). Пустые/шаблонные `user`/`password` portable Postgres и Redis заполняет `ensure_infra_credentials` при соответствующих `ERGO_*`, пока кластер Postgres не создан / в `redis.conf` нет `requirepass`. При `ERGO_BROKER=redis` отсутствующая секция `redis` дописывается в уже существующий `databases.yaml`.
+
+## Запрещено
+
+```dotenv
+# BAD — снова завести полный .env.docker.example с копией всех ключей
+# BAD — REDIS_HOST=… в .env.example (должен быть в databases.yaml)
+# BAD — POSTGRES_HOST / POSTGRES_PORT в env/postgres.env (должны быть в databases.yaml)
+# BAD — MEILI_HOST / MEILI_MASTER_KEY в .env.example (должны быть в env/search.env)
+# BAD — «на этом сервере 32 ГБ / 16 CPU» в комментариях example (см. no-host-fingerprint.mdc)
+```
+
+```dotenv
+# GOOD — режим в корне, детали во фрагменте
+# .env
+ERGO_PROXY=nginx
+ERGO_BROKER=redis
+ERGO_DB=portable_postgres
+
+# env/nginx.env
+NGINX_SERVER_NAME=app.example.com
+
+# env/postgres.env
+POSTGRES_MAX_CONNECTIONS=100
+```
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Не писать в `.env` из кода | [`no-auto-env-write.mdc`](../../.cursor/rules/no-auto-env-write.mdc) |
+| Не фиксировать железо хоста | [`no-host-fingerprint.mdc`](../../.cursor/rules/no-host-fingerprint.mdc) |
+| Redis / nginx / TLS | [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc) |
+| Docker | [`docker.mdc`](../../.cursor/rules/docker.mdc) |
+| Секреты в `.env` | [`security.mdc`](../../.cursor/rules/security.mdc) |

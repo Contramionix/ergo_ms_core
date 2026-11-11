@@ -91,7 +91,13 @@ ERGO MS можно запустить в контейнерах через **Doc
 Образы:
 
 - **`ergo_ms-python:local`** — `Dockerfile.python` (API, media_api, Celery, Jupyter)
-- **`ergo_ms-client:local`** — `Dockerfile.client` (Node 20, Vite / сборка)
+- **`ergo_ms-client:local`** — `Dockerfile.client` (Node 24 LTS, Vite / сборка; как portable runtime хоста)
+
+При обновлении с Node 20 сначала загрузите `node:24-bookworm-slim` и выполните
+`ergoms docker-build`. Автоматическая сборка от кэшированного client-образа
+допускается, если его `NODE_VERSION` подтверждает Node 24.11 или новее в ветке 24;
+старый или непроверяемый образ не подменяет новую базу. Явный `DOCKER_NODE_BASE`
+сохраняет приоритет.
 
 ## Команды
 
@@ -220,6 +226,22 @@ ergoms docker-init
 
 ## nginx в Docker
 
+В режиме `prod` nginx читает сборку из общего тома `client_dist`, куда пишет
+`client-build`; в `dev` используется каталог `core/client/dist` хоста.
+Для сброса публикации портов API и media-api нужен Docker Compose с поддержкой
+`!reset`. Выключенный profile Jupyter возвращает `404` на `/jupyter/`.
+
+HTTPS включается через `NGINX_USE_HTTPS=true`. `ERGO_SSL_CERT` и `ERGO_SSL_KEY`
+должны указывать на существующие файлы (относительные пути считаются от корня
+проекта). Lifecycle создаёт отдельный `docker-compose.nginx-tls.generated.yml`
+и монтирует сертификат и ключ только для чтения. При выключении HTTPS этот
+фрагмент удаляется; сгенерированные файлы не коммитятся.
+
+Для PostgreSQL 18 путь тома можно явно задать через
+`DOCKER_POSTGRES_VOLUME_PATH=/var/lib/postgresql`. Значение по умолчанию остаётся
+`/var/lib/postgresql/data`. Смена этого пути не переносит существующие данные:
+обновление версии БД требует отдельной миграции и резервной копии.
+
 При `DOCKER_PROFILE_NGINX=true`:
 
 - Шаблон — `core/deployment/docker/nginx/ergo_ms.docker.conf.template`
@@ -238,6 +260,18 @@ ergoms docker-init
 3. Выполняет `command` сервиса из compose
 
 Таймаут ожидания — `ERGO_DOCKER_WAIT_TIMEOUT` (по умолчанию 120 с) в effective env.
+
+## Воркеры на других узлах Swarm
+
+Обычный `ergoms docker-up` держит воркеры на той же машине и монтирует каталог проекта. Чтобы воркер работал на узле без этого каталога, код кладётся в образ.
+
+1. На основном узле: `ergoms docker-registry`. Адрес реестра — `DOCKER_SWARM_REGISTRY` в `env/docker.env`, только интерфейс быстрой сети.
+2. На обоих узлах Docker должен принимать этот реестр по HTTP (`insecure-registries`). Перезапуск демона делает человек.
+3. `ergoms docker-swarm-push` собирает цель `worker` и отправляет образ в реестр.
+4. `ergoms docker-swarm-deploy` поднимает стек `ergo_workers`: агент бюджета и воркер на узлах с меткой `ergo.worker=true`. Снять стек — `ergoms docker-swarm-down`.
+5. На узле с видеокартой заранее ставится `nvidia-container-toolkit`. Без него слот GPU в стеке не назначится; `DOCKER_SWARM_GPU=false` убирает требование карты.
+6. Redis и PostgreSQL основного узла должны слушать адрес быстрой сети: `REDIS_BIND_EXTRA`, `POSTGRES_LISTEN_EXTRA`, `POSTGRES_HBA_EXTRA`. Значения задаются в локальных `env/*.env` и применяются при `ergoms install-redis` и `ergoms install-postgres`.
+7. `CELERY_CLUSTER=on` на основном узле, и там должен идти `ergoms celery-balance --watch`. Пока ключ выключен, воркеры Swarm не получают план и не стартуют очереди.
 
 ## Типичные ошибки
 

@@ -1,0 +1,30 @@
+---
+description: UI ядра — Тумблер — ToggleSwitch
+alwaysApply: false
+---
+
+## Тумблер — ToggleSwitch
+
+Компонент: `@/components/ToggleSwitch.vue`.
+
+iOS-стиль binary switch. Не копируй track/thumb в модулях.
+
+```vue
+<ToggleSwitch v-model="enabled" label="вручную" />
+
+<!-- Родитель сам меняет состояние (3-state cycle и т.п.) -->
+<ToggleSwitch
+  :model-value="status === 'allowed'"
+  manual
+  aria-label="Разрешено"
+  @activate="cycleStatus"
+/>
+```
+
+| Prop | Когда |
+|------|-------|
+| `modelValue` | вкл/выкл |
+| `label` | подпись справа от track |
+| `disabled` | блокировка |
+| `manual` | клик только `@activate`, без авто-переключения `modelValue` |
+| `ariaLabel` | a11y; иначе берётся `label` |

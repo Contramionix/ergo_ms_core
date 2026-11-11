@@ -74,11 +74,29 @@ class CatalogError(ValueError):
     """Битый или неполный каталог контролей."""
 
 
+# API читает каталог в middleware на каждом ответе; разбор YAML занимает десятки мс
+# и держит GIL, поэтому параллельные запросы процесса выстраиваются в очередь.
+_CATALOG_CACHE: dict[Path, tuple[tuple[int, int], SecurityCatalog]] = {}
+
+
 def load_security_catalog(path: Path | None = None) -> SecurityCatalog:
     catalog_path = path or DEFAULT_PROFILES_PATH
+    try:
+        stat = catalog_path.stat()
+    except OSError:
+        raise CatalogError(f'Каталог не найден: {catalog_path}') from None
     if not catalog_path.is_file():
         raise CatalogError(f'Каталог не найден: {catalog_path}')
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    cached = _CATALOG_CACHE.get(catalog_path)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+    catalog = _parse_security_catalog(catalog_path)
+    _CATALOG_CACHE[catalog_path] = (stamp, catalog)
+    return catalog
 
+
+def _parse_security_catalog(catalog_path: Path) -> SecurityCatalog:
     try:
         raw = yaml.safe_load(catalog_path.read_text(encoding='utf-8'))
     except yaml.YAMLError as exc:

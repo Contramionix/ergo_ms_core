@@ -6,28 +6,24 @@
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "core/client"]
 	path = core/client
 	url = https://github.com/SKB-AI/ergo_ms_core_client.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "core/media_api"]
 	path = core/media_api
 	url = https://github.com/SKB-AI/ergo_ms_core_media_api.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "core/.github"]
 	path = core/.github
 	url = https://github.com/ergoms/.github.git
 	branch = dev
 	update = merge
 	ignore = all
-
 # Репозитории сторонних модулей
 
 [submodule "lms"]
@@ -36,140 +32,121 @@
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "porosity_analysis"]
 	path = modules/porosity_analysis
 	url = https://github.com/SKB-AI/ergo_ms_porosity_analysis.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "impuls_analysis"]
 	path = modules/impuls_analysis
 	url = https://github.com/SKB-AI/ergo_ms_impuls_analysis.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "video_analysis"]
 	path = modules/video_analysis
 	url = https://github.com/SKB-AI/ergo_ms_video_analysis.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "learning_analytics"]
 	path = modules/learning_analytics
 	url = https://github.com/SKB-AI/ergo_ms_learning_analytics.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "aspd"]
 	path = modules/aspd
 	url = https://github.com/ergoms/ergo_ms_aspd.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "vacancies_parser"]
 	path = modules/vacancies_parser
 	url = https://github.com/SKB-AI/ergo_ms_vacancies_parser.git
 	branch = dev
 	update = merge
-	ignore = all	
-	
+	ignore = all
+
 [submodule "education_materials_parser"]
 	path = modules/education_materials_parser
-	url = https://github.com/SKB-AI/ergo_ms_education_materials_parser.git
+	url = https://github.com/ergoms/ergo_ms_education_materials_parser.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/organizations"]
 	path = modules/organizations
 	url = https://github.com/SKB-AI/ergo_ms_organizations.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/crm"]
 	path = modules/crm
 	url = https://github.com/Wyaro/dealflow-crm.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/crm_remastered"]
 	path = modules/crm_remastered
 	url = https://github.com/SKB-AI/crm_remastered.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/students"]
 	path = modules/students
 	url = https://github.com/SKB-AI/ergo_ms_students.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/workers"]
 	path = modules/workers
 	url = https://github.com/SKB-AI/ergo_ms_workers.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/competence_core"]
 	path = modules/competence_core
 	url = https://github.com/Wyaro/ergo_ms_competence_core
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/projects"]
 	path = modules/projects
 	url = https://github.com/SKB-AI/ergo_ms_projects.git
 	branch = dev
 	update = merge
 	ignore = all
-	
 [submodule "modules/tasks"]
 	path = modules/tasks
 	url = https://github.com/SKB-AI/ergo_ms_tasks.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "neural_networks_hub"]
 	path = modules/neural_networks_hub
 	url = https://github.com/SKB-AI/ergo_ms_neural_networks_hub.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/ollama_framework"]
 	path = modules/ollama_framework
 	url = https://github.com/SKB-AI/ergo_ms_ollama_framework.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/ai_assistant"]
 	path = modules/ai_assistant
 	url = https://github.com/SKB-AI/ergo_ms_ai_assistant.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/bi_analysis"]
 	path = modules/bi_analysis
 	url = https://github.com/SKB-AI/ergo_ms_bi_analysis.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/module_template"]
 	path = modules/module_template
 	url = https://github.com/ergoms/module_template.git
@@ -183,21 +160,18 @@
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/hunter_s_notes"]
 	path = modules/hunter_s_notes
 	url = https://github.com/SKB-AI/ergo_ms_hunter_s_notes.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/saspd"]
 	path = modules/saspd
 	url = https://github.com/ergoms/ergo_ms_saspd.git
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/career_admission"]
 	path = modules/career_admission
 	url = https://github.com/ergoms/ergo_ms_career_admission.git
@@ -222,14 +196,18 @@
 	branch = dev
 	update = merge
 	ignore = all
-
 [submodule "modules/messenger"]
 	path = modules/messenger
 	url = https://github.com/ergoms/ergo_ms_messenger.git
 	branch = dev
 	update = merge
 	ignore = all
-
+[submodule "modules/scout"]
+	path = modules/scout
+	url = https://github.com/ergoms/ergo_ms_scout.git
+	branch = dev
+	update = merge
+	ignore = all
 [submodule "modules/dissertation_sandbox"]
 	path = modules/dissertation_sandbox
 	url = https://github.com/ergoms/dissertation_sandbox.git

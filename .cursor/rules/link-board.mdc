@@ -1,0 +1,40 @@
+---
+description: UI ядра — Схема связей — LinkBoard
+alwaysApply: false
+---
+
+## Схема связей — LinkBoard
+
+Компоненты: [`LinkBoard.vue`](../../core/client/src/components/LinkBoard.vue), [`LinkBoardCanvas.vue`](../../core/client/src/components/LinkBoardCanvas.vue), [`LinkBoardMatrix.vue`](../../core/client/src/components/LinkBoardMatrix.vue). Данные собирает родитель: ядро не знает домен модуля.
+
+Слева карточки, справа сгруппированные пилюли, кривые SVG с толщиной уровня 1–3, виды «Связи» и «Матрица». Редактирование матрицы — только при `editable`.
+
+```vue
+<script setup>
+import LinkBoard from '@/components/LinkBoard.vue'
+</script>
+
+<template>
+  <LinkBoard
+    :left-items="leftItems"
+    :right-groups="rightGroups"
+    :links="links"
+    :weak-threshold="2"
+  />
+</template>
+```
+
+| Prop | Когда |
+|------|-------|
+| `leftItems` | `{ id, code?, title, compact? }` — `compact` оставляет название в две строки |
+| `rightGroups` | `{ id, label, items: [{ id, label, compact? }] }` |
+| `links` | `{ from, to, level }` — `from` это id слева, `to` справа, `level` 1 знать / 2 уметь / 3 владеть |
+| `weakThreshold` | карточка слабая, если связей меньше порога (по умолчанию 2) |
+| `editable` | цикл уровня в матрице, событие `update:link` |
+| `rightLabel` | заголовок первого столбца матрицы |
+| `hideViewSwitch` | родитель уже показывает «Связи / Матрица» — внутренний ряд кнопок скрыт, легенда остаётся |
+| `v-model` | `'links'` / `'matrix'` |
+
+Слоты `#left-card`, `#right-pill`, `#info`, `#info-extra`. Событие `select` — закреплённая карточка или пилюля.
+
+**Запрещено:** копировать SVG-схему связей в модуле; хардкод hex из HTML-макета.

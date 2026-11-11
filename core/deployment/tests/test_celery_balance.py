@@ -37,6 +37,10 @@ def _settings(**kwargs) -> BalanceSettings:
         gpu_util_cap=80.0,
         watch_interval_sec=30.0,
         hysteresis_ratio=0.2,
+        cluster='off',
+        cluster_role='manager',
+        node_id='test-node',
+        node_ttl_sec=90,
     )
     values.update(kwargs)
     return BalanceSettings(**values)
@@ -536,6 +540,51 @@ class CgroupBudgetTests(unittest.TestCase):
                 Path(tmp) / 'missing',
             ):
                 self.assertEqual(host_budget._read_cgroup_memory_mb(), 2048.0)
+
+
+class HistoryBoundTests(unittest.TestCase):
+    def test_trim_history_keeps_tail(self) -> None:
+        from celery_balance.history import trim_history_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'history.jsonl'
+            lines = [
+                '{"ts":"t","queue":"q","task_name":"a","wall_ms":1,"peak_rss_mb":10}\n'
+                for _ in range(200)
+            ]
+            path.write_text(''.join(lines), encoding='utf-8')
+            original = path.stat().st_size
+            self.assertTrue(trim_history_file(path, max_bytes=max(2048, original // 4)))
+            self.assertLess(path.stat().st_size, original)
+            text = path.read_text(encoding='utf-8')
+            self.assertTrue(text.startswith('{'))
+            self.assertIn('"queue":"q"', text)
+
+    def test_stats_by_queue_reads_tail_only(self) -> None:
+        from celery_balance import history as history_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / 'virtual_env' / 'cache' / 'celery_balance'
+            cache.mkdir(parents=True)
+            path = cache / 'history.jsonl'
+            old = (
+                '{"ts":"old","queue":"slow","task_name":"t","wall_ms":9999,'
+                '"peak_rss_mb":10}\n'
+            )
+            recent = (
+                '{"ts":"new","queue":"slow","task_name":"t","wall_ms":100,'
+                '"peak_rss_mb":20}\n'
+            )
+            # Голова «старая»; окно чтения ровно под хвост из 8 свежих строк.
+            tail = recent * 8
+            path.write_text(old * 4000 + tail, encoding='utf-8')
+            window = len(tail.encode('utf-8')) + 40
+            with patch.object(history_mod, 'HISTORY_READ_MAX_BYTES', window):
+                with patch.object(history_mod, 'HISTORY_MAX_BYTES', 10 * 1024 * 1024):
+                    stats = history_mod.stats_by_queue(root, min_samples=5)
+            self.assertIn('slow', stats)
+            self.assertEqual(stats['slow'].wall_ms_median, 100.0)
 
 
 if __name__ == '__main__':

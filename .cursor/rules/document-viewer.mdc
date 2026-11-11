@@ -1,0 +1,45 @@
+---
+description: UI ядра — Просмотр PDF и DOCX — DocumentViewer
+alwaysApply: false
+---
+
+## Просмотр PDF и DOCX — DocumentViewer
+
+Компоненты: [`DocumentViewer.vue`](../../core/client/src/components/DocumentViewer.vue), [`DocumentViewerModal.vue`](../../core/client/src/components/DocumentViewerModal.vue). Файл грузится через `fetchMediaBlob` из [`mediaPreview.js`](../../core/client/src/js/utils/mediaPreview.js), не через iframe `/serve/` (`X-Frame-Options: DENY`).
+
+PDF — `pdfjs-dist` (worker из бандла). DOCX — `docx-preview`. Старый `.doc`, таблицы и архивы — кнопка «Скачать». Компонент подключай через `defineAsyncComponent`. На панели PDF: масштаб, книжная/альбомная ориентация, показ 1 / 2 / 4 страниц. При открытии масштаб такой, чтобы в окне был виден один лист целиком; кнопки масштаба по-прежнему приближают и отдаляют. Лист страницы всегда белый, текст тёмный — даже в тёмной теме; рамка и панель остаются цветом интерфейса. DOCX рисуется стопкой листов с промежутком, не сплошной лентой; кнопки 1 / 2 страницы и «по ширине окна» (сколько листов натурального размера помещается в ряд). Стрелок страниц и масштаба как у PDF нет. При прокрутке DOCX снизу по центру на секунду показывается счётчик «N из M» в том же виде, что HoverTooltip. У PDF есть текстовый слой, поэтому поиск браузера находит слова и в файле; на панели просмотра своя строка поиска по файлу PDF и DOCX.
+
+```vue
+<script setup>
+import { defineAsyncComponent, ref } from 'vue'
+
+const DocumentViewer = defineAsyncComponent(() => import('@/components/DocumentViewer.vue'))
+const DocumentViewerModal = defineAsyncComponent(
+  () => import('@/components/DocumentViewerModal.vue'),
+)
+
+const showViewer = ref(false)
+</script>
+
+<template>
+  <DocumentViewer :src="fileUrl" :filename="downloadFilename" />
+  <DocumentViewerModal
+    :visible="showViewer"
+    :src="fileUrl"
+    :filename="downloadFilename"
+    @close="showViewer = false"
+  />
+</template>
+```
+
+| Prop | Когда |
+|------|-------|
+| `src` | подписанный URL media_api |
+| `filename` | имя файла для типа и скачивания |
+| `compact` | ниже панель; без переключения ориентации и числа страниц |
+| `showToolbar` | `false` — без панели масштаба и страниц |
+| `highlight` | фраза, которую просмотр ищет сам и отмечает цветом, прокрутив к первому вхождению. Пробелы и перенос слова не мешают. Пустая строка — обычный просмотр. Если фраза задана, под заголовком окна легенда: оранжевый — фрагмент, к которому открыли файл, жёлтый — остальные такие же |
+
+Модалка: `visible`, `src`, `filename`, `title`, `modalId`.
+
+**Запрещено:** iframe `/serve/`, worker pdf.js с CDN, JWT в query URL.

@@ -78,7 +78,7 @@ alwaysApply: false
 - Миграции в контейнере — **`ergoms docker-migrate`** или `ergoms docker-shell-api`, не `python manage.py` на хосте против контейнерной БД
 - Порты на хост — из **существующих** ключей `.env` (`API_PORT`, `CLIENT_PORT`, …), не вводи параллельные `DOCKER_*_PORT` без необходимости
 - При `DOCKER_DATABASE=container` хост `localhost`/`127.0.0.1` в `databases.yaml` → имя сервиса **`postgres`** — логика в [`docker_runtime.py`](../../core/deployment/docker/docker_runtime.py)
-- Celery worker'ы в compose — из **`celery_workers.yaml`** через **`ergoms docker-gen-workers`**; файл `docker-compose.workers.generated.yml` не редактировать вручную. `CELERY_BALANCE=auto` читает overlay из того же `virtual_env/cache` (том cache).
+- Celery worker'ы ядра в compose — из корневого **`celery_workers.yaml`** через **`ergoms docker-gen-workers`**; файл `docker-compose.workers.generated.yml` не редактировать вручную. Именованные воркеры модуля (`modules/<name>/celery_workers.yaml`) попадают в **`ergoms docker-gen-modules`**: общий сервис `{name}-worker` и отдельный `{name}-worker-<id>` на каждый id. `CELERY_BALANCE=auto` читает overlay из того же `virtual_env/cache` (том cache).
 - Образ Python: entrypoint [`docker_entrypoint.sh`](../../core/deployment/docker/entrypoint/docker_entrypoint.sh) + [`wait_for_services.py`](../../core/deployment/docker/entrypoint/wait_for_services.py) — не обходить ожидание Redis/PostgreSQL в новых Python-сервисах compose
 - Effective env для контейнеров: `REDIS_HOST=redis`, `API_HOST=0.0.0.0` (bind), `CLIENT_API_HOST=localhost` (URL для браузера; не путать с bind), `DOCKER_ENABLED=true` — в `build_compose_env_overrides()`, не дублировать разрозненно в compose без причины
 - В контейнере Python: тонкая обёртка [`entrypoint/ergoms.sh`](../../core/deployment/docker/entrypoint/ergoms.sh) → `/usr/local/bin/ergoms` (`ergoms api …`, `ergoms media_api …`); полный CLI хоста не копировать в образ
@@ -142,6 +142,24 @@ proxy_pass http://127.0.0.1:8000;
 4. При зависимости от БД/Redis — `depends_on` + entrypoint `wait_for_services.py`
 5. Команда ergoms — строка в `commands.conf` + `help.manifest.yaml` (раздел `docker`)
 6. Документация — `.docs/docker.md` и этот файл при смене контракта
+
+## Воркеры Swarm на других узлах
+
+Compose-воркеры монтируют корень проекта с хоста. Узел без checkout их не запустит. Для кластера:
+
+- `ergoms docker-registry` — контейнер `registry:2`, данные в `virtual_env/cache/docker-registry`. Адрес `DOCKER_SWARM_REGISTRY` слушает только быструю сеть.
+- `ergoms docker-swarm-push` — цель `worker` в `Dockerfile.python` (код ядра, модули и `core/deployment` внутри образа) и `docker push`.
+- `ergoms docker-swarm-deploy` / `docker-swarm-down` — стек `ergo_workers` из `docker-stack.workers.generated.yml` (файл в `.gitignore`). Сервисы `ergo-celery-agent` и `ergo-celery-worker`, `deploy.mode: global`, ограничение `node.labels.ergo.worker == true`.
+- `ERGO_NODE_ID` в сервисе — `{{.Node.Hostname}}`. `CELERY_CLUSTER=on`, роль `agent`.
+- Видеокарта — `generic_resources` `NVIDIA-GPU`, если `DOCKER_SWARM_GPU` не выключен. На узле нужен `nvidia-container-toolkit`; его ставит человек.
+- `.env` и `databases.yaml` уходят как Swarm config из `virtual_env/cache/swarm-config/`. В копии базы адреса `127.0.0.1` и `localhost` заменяются на `DOCKER_SWARM_MANAGER_HOST`. Исходные файлы не меняются.
+- Оба демона Docker должны знать реестр как `insecure-registries`. Скрипт `daemon.json` не переписывает.
+
+Очередь на другой узел уходит при `placement: any`, `gpu` или `agent` в `task_footprint.yaml`. `agent` отдаёт весь потолок рабочему узлу. См. [`celery-balance.mdc`](celery-balance.mdc).
+
+`ergoms start` при `CELERY_CLUSTER=on` поднимает `celery-balance --watch` и, если Swarm активен и образ уже содержит `prepare_swarm_packages.py`, раскладывает стек `ergo_workers`. Сборку образа каждый старт не повторяет: первый раз нужен `ergoms docker-swarm-push`. `ergoms stop` снимает стек, пока Redis ещё жив. Нет Docker или Swarm — старт и остановка идут как раньше, разбор остаётся на этой машине.
+
+Воркер на узле сидит в сети host, видит сокет Docker этого узла и держит кэш с пакетами в томах `ergo_worker_cache` и `ergo_worker_packages`. Пакет с `swarm_worker: true` ставится в том при старте контейнера. Сбой установки не даёт воркеру стартовать. Кэш и пакеты — разные тома, поэтому `publish_package` сначала копирует собранный пакет рядом с местом установки. Веса Hugging Face воркер кладёт в `HF_HOME` внутри тома кэша. Агент плана сокет не получает.
 
 ## Связанные правила
 

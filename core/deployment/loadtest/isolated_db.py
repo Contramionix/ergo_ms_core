@@ -136,7 +136,6 @@ def refresh_clone(cfg: DefaultDbConfig, *, clone_name: str | None = None) -> str
 
     with _connect_admin(cfg) as conn:
         _terminate_db_backends(conn, target)
-        _terminate_db_backends(conn, cfg.name)
         with conn.cursor() as cur:
             cur.execute(f'DROP DATABASE IF EXISTS {_quote_ident(target)}')
             cur.execute(

@@ -1,0 +1,141 @@
+---
+paths:
+  - "**/.gitignore"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# .gitignore — четыре репозитория, разные зоны
+
+ERGO MS — **монорепозиторий-обёртка** (`ergo_ms`) с **git-submodule** ядра и модулей. У каждого submodule **свой** `.gitignore` и **свой** `git commit`. Не смешивай правила между репозиториями.
+
+См. также [`struct.mdc`](../../.cursor/rules/struct.mdc) — архитектура ядра и модулей.
+
+## Кратко
+
+- **Корень** `.gitignore` — инфраструктура всего проекта на диске (ergoms, `virtual_env/`, `logs/`, `media/`, deployment, корневой `.env`).
+- **`core/api/.gitignore`** — только артефакты **отдельного** клона Django-сервера (`ergo_ms_core_api`).
+- **`core/client/.gitignore`** — только артефакты **отдельного** клона Vue-клиента (`ergo_ms_core_client`).
+- **`core/media_api/.gitignore`** — минимум для **отдельного** клона media_api (`ergo_ms_core_media_api`).
+- **Модули** (`modules/<имя>/.gitignore`) — свой репозиторий модуля; правила ядра сюда не переноси. Рабочий `modules/<имя>/.env` игнорируй; шаблон `.env.example` оставляй в git.
+
+Перед правкой: `git -C <каталог> rev-parse --show-toplevel` — commit делай **в том репозитории**, где лежит изменённый `.gitignore`.
+
+## Карта репозиториев
+
+| Файл | Git root | Репозиторий |
+|------|----------|-------------|
+| [`.gitignore`](../../.gitignore) | корень проекта | `ergo_ms` (обёртка) |
+| [`core/api/.gitignore`](../../core/api/.gitignore) | `core/api/` | `ergo_ms_core_api` |
+| [`core/client/.gitignore`](../../core/client/.gitignore) | `core/client/` | `ergo_ms_core_client` |
+| [`core/media_api/.gitignore`](../../core/media_api/.gitignore) | `core/media_api/` | `ergo_ms_core_media_api` |
+| `modules/<имя>/.gitignore` | `modules/<имя>/` | репозиторий модуля |
+
+`core/deployment/` — **не** submodule; его артефакты игнорируются только в **корневом** `.gitignore`.
+
+## Зоны ответственности
+
+### Корневой `.gitignore` (ergo_ms)
+
+| Что игнорировать | Примеры в файле |
+|------------------|-----------------|
+| Конфиг среды разработки | `databases.yaml`, `celery_workers.yaml`, `.env`, `.env.*`, `/env/*` (кроме `*.example`), `maintenance.flag` |
+| Общее Python-окружение проекта | `virtual_env/*` (с `.gitkeep`), `__pycache__/` |
+| Каталоги runtime проекта | `/logs/*`, `/media/*`, `/notebooks/*`, `/virtual_env/backups/*` |
+| npm workspace | `/virtual_env/npm/node_modules` (legacy: `/node_modules`) |
+| Deployment и Docker | `core/deployment/wrappers/*`, `core/deployment/docker/*.generated.*`, rendered nginx |
+| VS Code multi-terminal | списки через `ergo-sync` / `sync_vscode_logs_services.py --json` (без `*.runtime.yaml` в `.vscode/`) |
+| Пути **относительно корня** к артефактам клиента | `core/client/dist`, `core/client/src/modules/core/sharedGlobs.generated.js` |
+
+### `core/api/.gitignore`
+
+| Что | Зачем |
+|-----|-------|
+| `.env`, `.venv`, `env/`, `venv/` | локальная разработка при **отдельном** клоне API |
+| `*.log`, `__pycache__/` | Python-артефакты API |
+
+**Не добавляй сюда:** `virtual_env/`, `logs/`, `media/`, `databases.yaml`, deployment — это зона **корня**.
+
+### `core/client/.gitignore`
+
+| Что | Зачем |
+|-----|-------|
+| `dist`, `dist-ssr`, `coverage` | сборка и тесты Vue |
+| `/node_modules`, npm/yarn/pnpm debug-логи | зависимости и логи npm |
+| `public/maintenance.json` | runtime от ergoms |
+| `src/modules/core/sharedGlobs.generated.js` | генерируется `generate-module-globs.js` |
+| Cypress, IDE (`.idea`, `*.suo`) | локальные артефакты клиента |
+
+**Не добавляй сюда:** корневой `virtual_env/`, `core/deployment/` — это зона **корня**.
+
+### `core/media_api/.gitignore`
+
+| Что | Зачем |
+|-----|-------|
+| `__pycache__/` | Python-кэш при отдельном клоне |
+
+Расширяй **минимально**; `.env` и логи media_api при полной установке через ergo_ms обычно покрывает **корень**, при standalone-клоне — добавляй в **этот** файл, не в `core/api/`.
+
+### `modules/<имя>/.gitignore`
+
+| Что | Зачем |
+|-----|-------|
+| `.env` | локальные переменные модуля; шаблон `.env.example` остаётся в git |
+| `__pycache__/` | Python-кэш при отдельном клоне модуля |
+
+Не копируй сюда корневые правила (`virtual_env/`, `logs/`, `databases.yaml`). Если используешь `.env.*`, обязательно добавь `!.env.example`.
+
+## Один файл — два пути (не дубликат по ошибке)
+
+Один и тот же артефакт может быть прописан **в двух** `.gitignore` с разными путями — это нормально:
+
+| Артефакт | Корень | Submodule client |
+|----------|--------|------------------|
+| Сборка клиента | `core/client/dist` | `dist` |
+| Module globs | `core/client/src/modules/core/sharedGlobs.generated.js` | `src/modules/core/sharedGlobs.generated.js` |
+
+При добавлении правила для клиента: **оба** места, если артефакт виден и при работе из монорепо, и при отдельном клоне `ergo_ms_core_client`.
+
+## Алгоритм — куда писать правило
+
+1. Определи **физический каталог** игнорируемого файла.
+2. `git -C <каталог> rev-parse --show-toplevel` — это репозиторий для commit.
+3. Выбери `.gitignore` **этого** репозитория:
+
+```
+корень ergo_ms/          → .gitignore
+core/api/                → core/api/.gitignore
+core/client/             → core/client/.gitignore
+core/media_api/          → core/media_api/.gitignore
+modules/<имя>/           → modules/<имя>/.gitignore
+```
+
+4. Если путь начинается с `virtual_env/`, `logs/`, `media/`, `core/deployment/` — почти всегда **корень**.
+5. Если путь внутри `core/client/src/` или `core/client/dist` — **client** (+ при необходимости дубль в корне с префиксом `core/client/`).
+
+## Запрещено
+
+```gitignore
+# BAD — virtual_env в core/api/.gitignore (это корень ergo_ms)
+/virtual_env/python/*
+
+# BAD — dist только в корне, без core/client/.gitignore (сломает standalone-клон client)
+core/client/dist
+
+# BAD — databases.yaml в core/api/.gitignore (конфиг монорепо, не API-submodule)
+databases.yaml
+```
+
+- Переносить правила из корня в submodule «для порядка» или наоборот — **без** проверки git root.
+- Коммитить содержимое `.gitignore` submodule из корня **ergo_ms**. Указатель SHA в обёртке — только по явной просьбе, см. [`git-commits.mdc`](../../.cursor/rules/git-commits.mdc).
+- Путать `core/api/.gitignore` и `core/media_api/.gitignore` — разные репозитории и сервисы.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Архитектура, submodule | [`struct.mdc`](../../.cursor/rules/struct.mdc) |
+| Куда коммитить | [`git-commits.mdc`](../../.cursor/rules/git-commits.mdc) |
+| `virtual_env/python/` | [`virtual-env.mdc`](../../.cursor/rules/virtual-env.mdc) |
+| npm workspace | [`npm-workspace.mdc`](../../.cursor/rules/npm-workspace.mdc) |
+| Deployment, docker | [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc), [`docker.mdc`](../../.cursor/rules/docker.mdc) |
+| Модули | [`modules.mdc`](../../.cursor/rules/modules.mdc) |

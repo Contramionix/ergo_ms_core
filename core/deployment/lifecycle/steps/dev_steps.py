@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -75,6 +77,41 @@ class DevForegroundStep(DeploymentStep):
         return StepResult()
 
 
+def _flag_value(args: list[str], name: str) -> str:
+    prefix = f'--{name}='
+    for index, arg in enumerate(args):
+        if arg.startswith(prefix):
+            return arg[len(prefix):].strip()
+        if arg == f'--{name}' and index + 1 < len(args):
+            return str(args[index + 1]).strip()
+    return ''
+
+
+def _named_module_workers(ctx: DeploymentContext, module: str) -> list[dict]:
+    """Имена воркеров из hook. Читает их venv-скрипт, не процесс runner."""
+    if not module:
+        return []
+    script = ctx.project_root / 'core/api/scripts/start_celery_worker.py'
+    py = host_ops.pick_python_for_ctx(ctx)
+    result = subprocess.run(
+        [*py, str(script), '--module', module, '--list-module-workers'],
+        cwd=str(ctx.project_root),
+        env=host_ops.api_env(ctx),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+    try:
+        payload = json.loads(result.stdout or '[]')
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict) and item.get('name')]
+
+
 class DevWorkerStep(DeploymentStep):
     @property
     def name(self) -> str:
@@ -85,8 +122,6 @@ class DevWorkerStep(DeploymentStep):
         script = 'core/api/scripts/start_celery_worker.py'
         py = host_ops.pick_python_for_ctx(ctx)
         script_path = ctx.project_root / script
-        import subprocess
-
         cmd = [*py, str(script_path)]
         extra_has_module = any(a == '--module' or a.startswith('--module=') for a in extra)
         extra_has_worker = any(a == '--worker' or a.startswith('--worker=') for a in extra)
@@ -100,9 +135,30 @@ class DevWorkerStep(DeploymentStep):
         else:
             cmd.extend(['--worker', 'all'])
         cmd.extend(extra)
-        code = subprocess.call(
-            cmd,
-            cwd=str(ctx.project_root),
-            env=host_ops.api_env(ctx),
-        )
+        named: list[subprocess.Popen] = []
+        if extra_has_module and not extra_has_worker:
+            module = _flag_value(extra, 'module')
+            env = host_ops.api_env(ctx)
+            for spec in _named_module_workers(ctx, module):
+                worker_id = str(spec['name'])
+                named.append(subprocess.Popen(
+                    [*py, str(script_path), '--module', module, '--worker', worker_id],
+                    cwd=str(ctx.project_root),
+                    env=env,
+                    start_new_session=True,
+                ))
+        interrupted = False
+        try:
+            code = subprocess.call(
+                cmd,
+                cwd=str(ctx.project_root),
+                env=host_ops.api_env(ctx),
+            )
+        except KeyboardInterrupt:
+            interrupted = True
+            code = 130
+        if interrupted:
+            for proc in named:
+                if proc.poll() is None:
+                    proc.terminate()
         return StepResult(exit_code=code)

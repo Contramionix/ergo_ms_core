@@ -14,7 +14,7 @@ services:
     ports:
       - "127.0.0.1:${LOADTEST_POSTGRES_PORT:-15432}:5432"
     volumes:
-      - postgres_loadtest_data:/var/lib/postgresql/data
+      - postgres_loadtest_data:${DOCKER_POSTGRES_VOLUME_PATH:-/var/lib/postgresql/data}
     networks:
       - ergo_net
     restart: unless-stopped

@@ -1,51 +1,17 @@
 ---
-description: Виртуальное окружение Python — portable runtime + virtual_env/python
-alwaysApply: true
+description: Виртуальное окружение Python — portable runtime, virtual_env/python, флаги PORTABLE_PYTHON_ENABLED
+alwaysApply: false
 ---
 
 # Python-окружение
 
-Одно окружение на проект:
+Запрет своего venv и команды — в [`no-direct-manage-py.mdc`](no-direct-manage-py.mdc). Здесь только карта каталогов.
 
-- **Portable CPython 3.12** — `virtual_env/packages/python/` (ставит `setup-full` / `ergoms install-python`)
-- **Project venv** — `virtual_env/python/` (создаётся из portable)
+- Portable CPython 3.12 — `virtual_env/packages/python/` (`ergoms install-python`)
+- Project venv — `virtual_env/python/`
+- Node.js LTS — `virtual_env/packages/nodejs/`
+- npm workspace — `virtual_env/npm/`; кэш — `virtual_env/cache/npm/`; команды клиента — `ergoms npm …`
+- Флаги в `.env`: `PORTABLE_PYTHON_ENABLED` и `PORTABLE_NODEJS_ENABLED` (по умолчанию `true`). Явные `install-python` / `install-nodejs` от флагов не зависят
+- В `virtual_env/` также celery, cache, resources, backups. Папку целиком не удаляй
 
-Пути:
-
-- Windows: `virtual_env\python\Scripts\python.exe`
-- Linux: `virtual_env/python/bin/python`
-
-**Node.js LTS** — `virtual_env/packages/nodejs/` (`ergoms install-nodejs` / setup-full).
-
-**npm workspace** — `virtual_env/npm/` (`package.json`, `package-lock.json`, `node_modules`); кэш npm — `virtual_env/cache/npm/`. Команды клиента: `ergoms npm …` (cwd = этот каталог). Подробности, Vite, Docker, запрет symlink на корень — [`npm-workspace.mdc`](npm-workspace.mdc).
-
-Автоустановка при `setup-full` управляется в `.env`:
-
-- `PORTABLE_PYTHON_ENABLED=true|false` (по умолчанию `true`)
-- `PORTABLE_NODEJS_ENABLED=true|false` (по умолчанию `true`)
-
-Явные `ergoms install-python` / `install-nodejs` работают независимо от флагов.
-
-В `virtual_env/` также лежат celery, cache, resources и др. — не удаляй папку целиком.
-
-## Запрещено
-
-- Создавать `.venv`, `venv`, новый `python -m venv` мимо ergoms
-- Пересоздавать `virtual_env/python/` вручную
-- `pip install` / `poetry install` мимо ergoms
-
-## Если Python не найден
-
-`ergoms setup` или `ergoms install-python`, затем `ergoms python-install` — не предлагай создать venv вручную и не требуй системный Python/Node для host setup.
-
-Зависимости: `ergoms python-install`, `ergoms poetry install`, полная настройка — `ergoms setup`.
-
-## Связанные правила
-
-| Тема | Файл |
-|------|------|
-| Команды ergoms | [`no-direct-manage-py.mdc`](no-direct-manage-py.mdc) |
-| Артефакты только в корне | [`project-root-artifacts.mdc`](project-root-artifacts.mdc) |
-| npm workspace (`virtual_env/npm`) | [`npm-workspace.mdc`](npm-workspace.mdc) |
-| Portable PostgreSQL | [`postgres-portable.mdc`](postgres-portable.mdc) |
-| Первичная настройка | [`.docs/cli.md`](../../.docs/cli.md) |
+PostgreSQL — [`postgres-portable.mdc`](postgres-portable.mdc). Артефакты вне корня — [`project-root-artifacts.mdc`](project-root-artifacts.mdc).

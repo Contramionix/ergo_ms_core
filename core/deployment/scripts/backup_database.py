@@ -225,6 +225,13 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     configure_stdio_utf8()
     args = _build_parser().parse_args(argv)
+    from project_isolation import IsolationError, validate_project
+
+    try:
+        validate_project(PROJECT_ROOT)
+    except IsolationError as exc:
+        _log('error', str(exc))
+        return 1
     alias = (args.database or '').strip() or None
     if args.action == 'restore':
         return run_restore(

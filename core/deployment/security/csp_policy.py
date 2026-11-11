@@ -106,6 +106,8 @@ def _with_script_hashes(script: str, extra_script_hashes: Sequence[str] | None) 
 def build_csp_policy(
     mode: str | None = None,
     extra_script_hashes: Sequence[str] | None = None,
+    *,
+    allow_same_origin_frames: bool = False,
 ) -> str:
     """Строка Content-Security-Policy без кавычек обёртки nginx."""
     resolved = normalize_csp_mode(mode)
@@ -118,17 +120,19 @@ def build_csp_policy(
         worker = f"worker-src 'self' blob: data: {_MAP_WORKER}"
         child = f"child-src blob: {_MAP_CHILD}"
     elif resolved == 'no_unsafe':
-        # Без unsafe-*; домены карт сохранены (карты могут сломаться — ожидаемо).
-        script = f"script-src 'self' {_MAP_SCRIPT}"
+        # Без JS eval и unsafe-inline; домены карт сохранены (карты могут сломаться — ожидаемо).
+        # wasm-unsafe-eval — только WebAssembly.instantiate (JBIG2/JPEG2000 в pdf.js), не eval().
+        script = f"script-src 'self' 'wasm-unsafe-eval' {_MAP_SCRIPT}"
         style = f"style-src 'self' {_MAP_STYLE}"
         img = "img-src 'self' data: blob: https:"
         connect = f"connect-src 'self' {_MAP_CONNECT}"
         worker = f"worker-src 'self' blob: data: {_MAP_WORKER}"
         child = f"child-src blob: {_MAP_CHILD}"
     else:
-        # no_unsafe_plus_externals (phase 1 stub): без unsafe + без широкого img https:
+        # no_unsafe_plus_externals (phase 1 stub): без JS eval + без широкого img https:
         # и без внешних script/style/connect карт — полный аудит доменов в phase 2.
-        script = "script-src 'self'"
+        # wasm-unsafe-eval — только компиляция WebAssembly для картинок в PDF.
+        script = "script-src 'self' 'wasm-unsafe-eval'"
         style = "style-src 'self'"
         img = f"img-src 'self' data: blob: {_MAP_IMG_TILES}"
         connect = "connect-src 'self'"
@@ -140,6 +144,7 @@ def build_csp_policy(
         script,
         style,
         img,
+        "media-src 'self' blob:",
         "font-src 'self' data:",
         connect,
         worker,
@@ -150,15 +155,24 @@ def build_csp_policy(
     ]
     script = _with_script_hashes(script, extra_script_hashes)
     parts[1] = script
+    if allow_same_origin_frames:
+        # Keep the existing map/blob frame sources and the top-level anti-framing policy.
+        sources = child.removeprefix('child-src ')
+        if "'self'" not in sources.split():
+            sources = "'self' " + sources
+        parts.append('frame-src ' + sources)
     return '; '.join(parts)
 
 
 def build_security_headers_nginx(
     mode: str | None = None,
     extra_script_hashes: Sequence[str] | None = None,
+    *,
+    allow_same_origin_frames: bool = False,
 ) -> str:
     """Фрагмент nginx add_header (как snippets/security_headers.conf) для режима CSP."""
-    csp = build_csp_policy(mode, extra_script_hashes=extra_script_hashes)
+    csp = build_csp_policy(mode, extra_script_hashes=extra_script_hashes,
+                           allow_same_origin_frames=allow_same_origin_frames)
     return (
         '# HTTP security headers для SPA, static и proxy (add_header ... always).\n'
         'add_header X-Frame-Options "DENY" always;\n'

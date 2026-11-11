@@ -136,6 +136,83 @@ export async function readVsixPackageJson(vsixPath, tempRoot) {
   return packageJson;
 }
 
+async function listFiles(rootDir, prefix = '') {
+  const found = [];
+  for (const entry of await readdirAsync(join(rootDir, prefix), { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      found.push(...(await listFiles(rootDir, rel)));
+    } else {
+      found.push(rel);
+    }
+  }
+  return found;
+}
+
+function sameText(a, b) {
+  const norm = (buf) => buf.toString('utf-8').replace(/\r\n/g, '\n').trim();
+  return norm(a) === norm(b);
+}
+
+// vsce переписывает package.json и README.md, а .vscodeignore в пакет не кладёт.
+const PACKAGING_REWRITES = new Set(['package.json', 'README.md', '.vscodeignore']);
+
+function globToRegExp(pattern) {
+  const body = pattern
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '/**')
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*/g, '\u0000')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\u0000/g, '.*');
+  return new RegExp(`^${body}$`);
+}
+
+async function packagingIgnores(sourceDir) {
+  const path = join(sourceDir, '.vscodeignore');
+  if (!existsSync(path)) {
+    return [];
+  }
+  return (await readFile(path, 'utf-8'))
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('!'))
+    .map(globToRegExp);
+}
+
+/**
+ * Файлы исходника, которые в VSIX другие или которых там нет.
+ * Пустой список — VSIX собран из этих исходников.
+ */
+export async function vsixDriftFromSource(vsixPath, sourceDir, tempRoot) {
+  const extensionId = vsixPath.split(/[/\\]/).pop().replace(/\.vsix$/, '');
+  const tempDir = join(tempRoot, `${extensionId}.drift`);
+  if (existsSync(tempDir)) {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+  try {
+    const extractedDir = await extractVsix(vsixPath, tempDir);
+    const ignores = await packagingIgnores(sourceDir);
+    const drift = [];
+    for (const rel of await listFiles(sourceDir)) {
+      if (PACKAGING_REWRITES.has(rel) || ignores.some((rule) => rule.test(rel))) {
+        continue;
+      }
+      const packed = join(extractedDir, rel);
+      if (!existsSync(packed)) {
+        drift.push(rel);
+        continue;
+      }
+      if (!sameText(await readFile(join(sourceDir, rel)), await readFile(packed))) {
+        drift.push(rel);
+      }
+    }
+    return drift;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 /** Прежние id/папки после переименования расширения. */
 const LEGACY_EXTENSION_CLEANUP = {
   'ergo-ms-tasks': {
@@ -145,8 +222,19 @@ const LEGACY_EXTENSION_CLEANUP = {
 };
 
 export async function removeLegacyExtensionDirs(installDir, extensionName) {
+  if (!existsSync(installDir)) {
+    return;
+  }
+  // Прежний установщик клал копию без префикса издателя: <name>-<версия>.
+  // Cursor грузил её рядом с новой, и старый код продолжал работать.
+  const unprefixed = new RegExp(`^${extensionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+\\.\\d+\\.\\d+$`);
+  for (const entry of await readdirAsync(installDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && unprefixed.test(entry.name)) {
+      await rm(join(installDir, entry.name), { recursive: true, force: true }).catch(() => {});
+    }
+  }
   const legacy = LEGACY_EXTENSION_CLEANUP[extensionName];
-  if (!legacy || !existsSync(installDir)) {
+  if (!legacy) {
     return;
   }
   for (const exact of legacy.exactNames || []) {

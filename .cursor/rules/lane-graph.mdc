@@ -1,0 +1,46 @@
+---
+description: UI ядра — Схема по колонкам — LaneGraph
+alwaysApply: false
+---
+
+## Схема по колонкам — LaneGraph
+
+Компонент: [`LaneGraph.vue`](../../core/client/src/components/LaneGraph.vue). Раскладка: [`laneGraphLayout.js`](../../core/client/src/js/utils/laneGraphLayout.js).
+
+Универсальная схема: колонки (дорожки), карточки, стрелки зависимостей, полоса нагрузки колонки, режимы «обзор / критический путь / блокирующие». Ядро не знает учебный план, семестр и з.е. Модуль сам мапит домен в `items` / `lanes` / `categories`. Подключай через `defineAsyncComponent`.
+
+```vue
+<script setup>
+import { defineAsyncComponent } from 'vue'
+
+const LaneGraph = defineAsyncComponent(() => import('@/components/LaneGraph.vue'))
+</script>
+
+<template>
+  <LaneGraph
+    :items="items"
+    :lanes="lanes"
+    :categories="categories"
+    weight-unit="з.е."
+  />
+</template>
+```
+
+| Prop | Когда |
+|------|-------|
+| `items` | `{ id, title, lane, row?, category, weight, badge, optional, filled?, dependsOn[], highlight }` — `id` непрозрачный, не pk БД. `dependsOn` — id или `{ id, tone?, dashed?, sibling? }`: цвет и пунктир стрелки, `sibling` — связь внутри одной колонки (скоба справа, не ошибка порядка). `filled` — карточка залита цветом категории |
+| `lanes` | `{ id, title, weightLimit? }` — индекс колонки 0-based; без `weightLimit` полоса без «перегруза» |
+| `categories` | `{ id, label, tone }` — `tone`: `accent` / `info` / `success` / `warning` / `neutral` |
+| `weightUnit` | подпись единиц нагрузки |
+| `emptyText` | своё пустое состояние |
+| `defaultMode` | `overview` (по умолчанию) / `critical` / `blocking` |
+| `showModes` | `false` — без переключателя режимов, всегда обзор |
+| `showEdges` | `false` — без SVG-стрелок |
+| `showDetail` | `false` — без текста под схемой |
+| `showWarnings` | `false` — без предупреждений под схемой |
+| `uniformCards` | все карточки одной высоты, заголовок обрезается на третьей строке |
+| `focusChain` | `full` (по умолчанию) — при наведении вся цепочка; `direct` — только соседи карточки |
+
+Слоты `#item`, `#detail`, `#legend`. События `hover`, `select`. Режимы критического пути и блокирующих скрываются, если рёбер нет или `showModes` выключен. Карточки — поверхность системы и обычный текст, цвет категории на левой кромке; заливка только у `filled`. Стили — `LaneGraph.scss` рядом с компонентом. Цвета только `--ui-*`, координаты — `v-csp-style`.
+
+**Запрещено:** имена вроде «учебный план» в ядре; vue-flow/d3 в этом компоненте; прямые вызовы API модулей из `LaneGraph`.

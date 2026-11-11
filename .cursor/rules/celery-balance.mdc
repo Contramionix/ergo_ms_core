@@ -11,7 +11,7 @@ alwaysApply: false
 - Режимы: `CELERY_BALANCE=auto` (overlay при старте worker, **дефолт**) | `recommend` (отчёт) | `off` (только yaml)
 - Hook модуля: `modules/<name>/task_footprint.yaml` — YAML, вне Django, как `process_roles.yaml`
 - Overlay: `virtual_env/cache/celery_balance/decision.json` (`plans`, `queue_limits`, `queue_classes`, `reserve_light`, `non_light_cap`, `pause_queues`)
-- История RSS / VRAM / wall-time: `virtual_env/cache/celery_balance/history.jsonl` (без payload задач)
+- История RSS / VRAM / wall-time: `virtual_env/cache/celery_balance/history.jsonl` (без payload задач). На диске не больше 32 МиБ (хвост), в память для медианы читается не больше 8 МиБ с конца — иначе postrun раздувает файл и `celery-balance` зависает
 - Бюджет RAM/CPU/VRAM **общий** на все воркеры; GPU считается **по картам**, не суммой VRAM
 - `off` — прежнее поведение, только `celery_workers.yaml`
 
@@ -78,6 +78,28 @@ ergoms celery-balance --watch
 ```
 
 `--dry-run` не пишет overlay и не трогает процессы. `auto` пишет overlay; `start_celery_worker.py` читает его при старте.
+
+## Кластер узлов
+
+`CELERY_CLUSTER=off` (значение по умолчанию) считает бюджет только этой машины.
+
+`CELERY_CLUSTER=on` и `CELERY_CLUSTER_ROLE=manager` публикует бюджет в Redis (`celery_balance:node:<id>`, срок `CELERY_CLUSTER_NODE_TTL`) и делит `max_parallel` очереди между живыми узлами. План узла (`celery_balance:plan:<id>`) живёт отдельно: срок `CELERY_CLUSTER_PLAN_TTL` (по умолчанию не короче 600 с и не короче `NODE_TTL*2` / `WATCH_INTERVAL*6`). Пока идёт долгий круг, поток keepalive делает `EXPIRE` по уже опубликованным планам. Агент (`CELERY_CLUSTER_ROLE=agent`) только публикует свой бюджет. Задачу по-прежнему целиком берёт один воркер: балансировщик задаёт, сколько слотов очереди держит каждый узел.
+
+Поле `placement` в `task_footprint.yaml`:
+
+- `auto` — значение по умолчанию, в том числе у очереди без файла. При `CELERY_CLUSTER=on` и `CELERY_CLUSTER_AUTO_PLACEMENT=agent` очередь класса `medium` или `heavy` без `gpu_required` ведёт себя как `agent`: пока жив рабочий узел, сообщения берёт только он, в пределах своего бюджета процессора и памяти. Сверх бюджета задачи ждут в брокере, а не исполняются на менеджере: общая очередь не делится, и менеджер иначе забирает всё. Для такой очереди включена проверка выхода в сеть (`CELERY_CLUSTER_EGRESS_URL`). `light`, задача с `gpu_required` и режим `CELERY_CLUSTER_AUTO_PLACEMENT=off` остаются на менеджере. Если рабочего узла нет, весь потолок снова на менеджере. Модулю ничего объявлять не нужно.
+- `primary` — только узел-менеджер. Так отказываются от автоматического переноса: локальный дамп, архив или веса модели, которых нет на рабочем узле.
+- `any` — любой живой узел, где хватает RAM и CPU. Если потолок очереди не меньше числа таких узлов, каждому достаётся хотя бы один слот, остаток делится по свободным ресурсам.
+- `gpu` — узел, чья видеокарта проходит по `vram_mb`. Без карты и при `cpu_fallback: false` очередь ставится на паузу.
+- `agent` — рабочий узел заполняется первым, но только до своего бюджета CPU и RAM. Остаток потолка остаётся на менеджере и не ставится на паузу. Пауза на менеджере бывает, когда узел забрал весь потолок. Очередь с `needs_network` на узел без выхода в сеть не ставится. Когда агента нет, весь потолок снова у менеджера.
+
+Если задача на рабочем узле падает из-за отсутствия локального файла, каталога, модуля Python или соединения с `127.0.0.1` / `localhost` / `::1`, ядро пишет карантин в Redis (`celery_balance:quarantine:<queue>`, срок `CELERY_CLUSTER_QUARANTINE_TTL`) и переотправляет задачу в ту же очередь. Пока ключ жив, планировщик держит очередь на менеджере. Модуль может бросить `RequiresPrimaryNode` из `src.core.utils.celery`, если заранее знает, что нужен основной сервер. Снять карантин: `ergoms celery-balance --release-queue <name>` или `--release-all`. Список виден в `ergoms celery-balance --cluster`.
+
+Воркер на агенте слушает только очереди из `allowed_queues` плана. Пустой план из живого Redis — процесс не стартует и не подписывается на все очереди. Если ключа плана нет (TTL), агент берёт `last_plan.json` в кэше, затем `decision.json`. Пока очередей нет, bootstrap ждёт до сигнала, без Docker-цикла exit 1. Узел, который перестал присылать бюджет, выпадает, его доля переходит к оставшимся.
+
+Отчёт: `ergoms celery-balance --cluster`.
+
+Воркеры других машин — образ `worker` и стек Swarm (`ergoms docker-swarm-deploy`), не bind-mount корня проекта. См. [`docker.mdc`](docker.mdc). При `CELERY_CLUSTER=on` тот же стек и наблюдатель плана поднимает `ergoms start`: супервизор (`supervise_watch.py`) держит `celery-balance --watch` и перезапускает его после падения; в `watch.pid` — PID супервизора. Если Docker стартовал раньше адреса менеджера и Swarm остался с ошибкой прослушивания, этот старт один раз перезапускает Docker, когда адрес уже назначен, и раскладывает стек снова. Следующий запуск Docker ждёт этот адрес. При `DOCKER_SWARM_OLLAMA=on` стек поднимает на рабочем узле сервис Ollama (`DOCKER_SWARM_OLLAMA_BIND` — адрес узла в быстрой сети). Карту резервирует этот сервис, а не воркер. Воркер ходит к нему через `OLLAMA_BASE_URL_OVERRIDE`: файл модуля в образе иначе переписывает `OLLAMA_BASE_URL`. Имена config стека содержат хеш файла, потому что Swarm не меняет config с тем же именем.
 
 Knobs: [`env/celery.env.example`](../../env/celery.env.example). Inventory железа только runtime, не в git.
 

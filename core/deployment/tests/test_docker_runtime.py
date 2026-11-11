@@ -131,7 +131,7 @@ class DockerRuntimeTests(unittest.TestCase):
             content = compose_env.read_text(encoding='utf-8')
             self.assertIn('ERGO_RUNTIME=docker', content)
             self.assertIn('DOCKER_ENABLED=true', content)
-            self.assertIn('DOCKER_NODE_BASE=node:20-bookworm-slim', content)
+            self.assertIn('DOCKER_NODE_BASE=node:24-bookworm-slim', content)
 
     def test_prepare_compose_artifacts_loadtest_does_not_kill_app_ports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -224,17 +224,38 @@ class DockerRuntimeTests(unittest.TestCase):
 
     def test_node_base_uses_official_when_present(self) -> None:
         def exists(name: str) -> bool:
-            return name == 'node:20-bookworm-slim'
+            return name == 'node:24-bookworm-slim'
 
         with patch('docker_runtime._docker_image_exists', side_effect=exists):
-            self.assertEqual(resolve_docker_node_base({}), 'node:20-bookworm-slim')
+            self.assertEqual(resolve_docker_node_base({}), 'node:24-bookworm-slim')
 
     def test_node_base_fallback_only_without_official(self) -> None:
         def exists(name: str) -> bool:
             return name == 'ergo_ms-client:local'
 
-        with patch('docker_runtime._docker_image_exists', side_effect=exists):
+        with (
+            patch('docker_runtime._docker_image_exists', side_effect=exists),
+            patch('docker_runtime.subprocess.run') as inspect,
+        ):
+            inspect.return_value.returncode = 0
+            inspect.return_value.stdout = 'PATH=/usr/bin\nNODE_VERSION=24.18.0\n'
             self.assertEqual(resolve_docker_node_base({}), 'ergo_ms-client:local')
+
+    def test_node_base_does_not_reuse_incompatible_or_unverifiable_cached_client(self) -> None:
+        for metadata in ('NODE_VERSION=20.20.2', 'NODE_VERSION=24.10.0', 'PATH=/usr/bin', 'NODE_VERSION=unknown'):
+            with (
+                self.subTest(metadata=metadata),
+                patch('docker_runtime._docker_image_exists', side_effect=lambda name: name == 'ergo_ms-client:local'),
+                patch('docker_runtime.subprocess.run') as inspect,
+            ):
+                inspect.return_value.returncode = 0
+                inspect.return_value.stdout = metadata
+                self.assertEqual(resolve_docker_node_base({}), 'node:24-bookworm-slim')
+
+    def test_explicit_node_base_is_preserved(self) -> None:
+        with patch('docker_runtime._docker_image_exists') as inspect:
+            self.assertEqual(resolve_docker_node_base({'DOCKER_NODE_BASE': 'custom:node'}), 'custom:node')
+        inspect.assert_not_called()
 
 
 class RedisPublishAndAuthTests(unittest.TestCase):

@@ -67,9 +67,25 @@ def run_shell_build(project_root: Path) -> int:
         print(format_console('error', t('package_json_not_found_npm')), file=sys.stderr)
         return 1
     print(format_console('info', t('client_build_plan_shell')))
-    return subprocess.call(
+    code = subprocess.call(
         [npm_cmd, 'run', 'build', '-w', NPM_WORKSPACE],
         cwd=str(npm_root),
+        env=_process_env(project_root),
+    )
+    if code != 0:
+        return code
+    return _precompress_dist(project_root)
+
+
+def _precompress_dist(project_root: Path) -> int:
+    script = project_root / 'core' / 'client' / 'scripts' / 'precompress-dist.mjs'
+    dist = project_root / 'core' / 'client' / 'dist'
+    if not script.is_file() or not dist.is_dir():
+        return 0
+    node = resolve_node(project_root)
+    return subprocess.call(
+        [str(node), str(script), str(dist)],
+        cwd=str(project_root),
         env=_process_env(project_root),
     )
 

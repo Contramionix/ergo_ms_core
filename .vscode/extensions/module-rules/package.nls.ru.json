@@ -1,5 +1,5 @@
 {
   "extension.displayName": "ERGO MS Module Cursor Rules",
-  "extension.description": "Подхватывает .cursor/rules/*.mdc из modules/ через Cursor plugins API",
-  "command.sync.title": "ERGO MS: Синхронизировать Module Cursor Rules"
+  "extension.description": "Снимает копии правил модулей: Cursor читает вложенные .cursor/rules сам",
+  "command.sync.title": "ERGO MS: Убрать копии правил модулей"
 }

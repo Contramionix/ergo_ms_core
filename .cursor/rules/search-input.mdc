@@ -37,7 +37,9 @@ alwaysApply: false
 <!-- BAD — свой SearchInput в модуле без явной причины -->
 ```
 
-**Исключения:** спецкомпоненты с выпадающими результатами (например `HeaderSearch.vue`), поле поиска внутри `SelectBox` (`searchable`), не-text поля (`type="date"`, `type="number"`).
+**Исключения:** спецкомпоненты с выпадающими результатами (например `HeaderSearch.vue`), не-text поля (`type="date"`, `type="number"`).
+
+Внутри выпадающего меню (`SelectBox` с `searchable`) — `layout="fill"` и стили родителя под полосу меню; не toolbar `grow`/`fixed`.
 
 ## Базовый пример
 
@@ -98,7 +100,7 @@ const searchQuery = ref('')
 | `clearable` | `true` | `:clearable="false"` — скрыть крестик очистки |
 | `background` | `'primary'` | `'secondary'` — admin toolbar |
 | `focusBorder` | `'default'` | `'primary'` — border без shadow при focus (admin) |
-| `layout` | `'grow'` | `'fixed'` — admin toolbar (`flex: 0 1 280px`) |
+| `layout` | `'grow'` | `'fixed'` — admin toolbar (`flex: 0 1 280px`); `'fill'` — на всю ширину родителя (меню SelectBox) |
 | `disabled` | `false` | блокировка ввода |
 
 Крестик виден, пока в поле есть текст; клик очищает значение (`update:modelValue` / `input` / `clear`) и возвращает фокус в input. Нативный clear у `type="search"` скрыт.

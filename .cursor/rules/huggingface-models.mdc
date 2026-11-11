@@ -68,7 +68,7 @@ model = SentenceTransformer(resolve_huggingface_source(repo_id))
 model = SentenceTransformer(ensure_local_source(repo_id))
 ```
 
-`ollama_models.yaml` — только имена библиотеки Ollama (или `hf.co/…` GGUF). Если в `OLLAMA_EMBEDDINGS_MODEL` стоит `org/name`, `pull-setup-models` берёт `default` из yaml (`embeddinggemma`) и не делает `ollama pull` этого снимка. Потребитель RAG может считать тот же снимок через sentence-transformers: hook `huggingface_models.yaml` и `ergoms pull-huggingface-models`. Веса моделей — не `packages.yaml` ([`packages.mdc`](packages.mdc)).
+`ollama_models.yaml` — только имена библиотеки Ollama (или `hf.co/…` GGUF). Если в `OLLAMA_EMBEDDINGS_MODEL` стоит `org/name`, `pull-setup-models` эту строку пропускает и не подставляет `default` из yaml. Снимок считает sentence-transformers (модуль эмбеддингов и RAG). Веса — hook `huggingface_models.yaml` и `ergoms pull-huggingface-models`. `default` в yaml берётся, только если переменная пуста. Веса моделей — не `packages.yaml` ([`packages.mdc`](packages.mdc)).
 
 ## Связанные правила
 

@@ -35,6 +35,7 @@ alwaysApply: false
 | Env + systemd units | `core/deployment/wrappers/`, `…/systemd/` |
 | clean trash | `.ergo_clean_trash_*` в корне (в `.gitignore`) |
 | Снимки SQL-баз | `virtual_env/backups/<метка>/` (`ergoms db-backup`; `ergoms clean` не трогает) |
+| План ролей рабочих компаний | `virtual_env/access-plans/workspace-access.yaml` (локальный YAML, не в git; путь — `workspace_access_plan_path`) |
 
 ## Владелец файлов (Linux)
 

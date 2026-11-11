@@ -147,7 +147,7 @@ controls:
 | `csrf.trusted_origins` | можно пусто | явный список в production | явный список в production | явный список всегда |
 | `csp.strict` | как есть (`as_is`) | как есть (`as_is`) | без `unsafe-eval` и `unsafe-inline` (`no_unsafe`) | плюс урезание внешних источников (`no_unsafe_plus_externals`, phase 1) |
 
-Контроль `csp.strict` (**phase 1, status `partial`**): env `API_CSP_MODE` читают API middleware и nginx render из [`csp_policy.py`](../core/deployment/security/csp_policy.py). При unset runtime/профиль подставляет значение уровня. На `hardened` карты (Yandex/OSM) могут перестать работать — это ожидаемо. На `maximum` внешние домены урезаны частично (stub); `security-check` даёт warning, не ложный OK.
+Контроль `csp.strict` (**phase 1, status `partial`**): env `API_CSP_MODE` читают API middleware и nginx render из [`csp_policy.py`](../core/deployment/security/csp_policy.py). При unset runtime/профиль подставляет значение уровня. На `hardened` карты (Yandex/OSM) могут перестать работать — это ожидаемо. На `maximum` внешние домены урезаны частично (stub); `security-check` даёт warning, не ложный OK. В режимах без `unsafe-eval` в `script-src` остаётся `wasm-unsafe-eval`: браузеру можно скомпилировать WebAssembly (картинки JBIG2 и JPEG2000 в просмотре PDF), произвольный JavaScript через `eval` по-прежнему запрещён.
 | `headers.baseline` | включены | включены | включены | включены |
 
 Контроль `cors.explicit_origins` на уровне `standard` уже отражён в коде: [`cors.py`](../core/api/src/config/settings/cors.py) подставляет localhost только при `ERGO_ENV=development`. В production без `CORS_ALLOWED_ORIGINS` / `CORS_ALLOWED_ORIGIN_REGEXES` берётся публичный origin nginx или `FRONTEND_BASE_URL`; если и он пуст, запуск прерывается (`ImproperlyConfigured`). Отдельной переменной `ERGO_SECURITY` для этого контроля нет.
@@ -162,7 +162,7 @@ controls:
 | `realtime.origin_validation` | нет | да | да | да |
 | `realtime.device_binding` | нет | да | да | да |
 | `realtime.message_limits` | нет | ограничение размера | размер и частота | размер, частота и разрыв соединения при превышении |
-| `messenger.access_default` | доступ разрешён | доступ запрещён | запрещён | запрещён |
+| `chat.access_default` | доступ разрешён | доступ запрещён | запрещён | запрещён |
 
 ### Файлы
 

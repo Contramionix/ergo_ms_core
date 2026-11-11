@@ -380,6 +380,16 @@ def should_use_docker_exec(host: str, runtime: str, service: str | None = None) 
 
 
 def _compose_exec_cmd(root: Path, service: str, inner: list[str], *, env_pairs: list[str] | None = None) -> list[str]:
+    from project_isolation import validate_project
+
+    if validate_project(root) is not None:
+        from lifecycle.docker.ops import build_compose_cmd
+
+        extra = ['-T']
+        for pair in env_pairs or []:
+            extra.extend(['-e', pair])
+        command, _cwd = build_compose_cmd('exec', project_root=root, extra_args=[*extra, service, *inner])
+        return command
     compose = _find_docker_compose()
     if not compose:
         raise BackupError(t('db_backup_docker_compose_missing'))

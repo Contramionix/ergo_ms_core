@@ -1,0 +1,84 @@
+---
+paths:
+  - "**/*.vue"
+  - "**/*.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Pagination — пагинация списков
+
+Единый UI навигации по страницам — [`Pagination.vue`](../../core/client/src/components/Pagination.vue).
+
+Для таблиц с колонками используй **`DataTable`** с `:enable-pagination="true"`: внутри он подключает тот же `Pagination`. Не дублируй bootstrap-список `ul.pagination` в модуле.
+
+Bootstrap `pagination` / `page-item` / `page-link` в проекте **не подключены** глобально — самодельные списки ломаются (маркеры, скачки layout).
+
+## Обязательно
+
+- Таблицы с `page` / `page_size` — **`DataTable`** и `:enable-pagination="true"`
+- Карточки / сетки без таблицы — **`Pagination`** напрямую (`@/components/Pagination.vue`)
+- Для list-страниц храни `page` в **URL query** через `useRouteQueryState` — см. [`client_code.mdc`](../../.cursor/rules/client_code.mdc)
+
+## Запрещено
+
+```vue
+<!-- BAD — bootstrap-классы без стилей ядра -->
+<ul class="pagination pagination-modern">
+  <li class="page-item">...</li>
+</ul>
+
+<!-- BAD — свой Pagination в модуле без явной причины -->
+```
+
+## Базовый пример — таблица
+
+```vue
+<script setup>
+import DataTable from '@/components/DataTable.vue'
+</script>
+
+<template>
+  <DataTable
+    :columns="columns"
+    :items="items"
+    :total-items="total"
+    :enable-pagination="true"
+    :current-page="page"
+    :items-per-page="pageSize"
+    @update:current-page="page = $event"
+  />
+</template>
+```
+
+## Базовый пример — без таблицы
+
+```vue
+<script setup>
+import Pagination from '@/components/Pagination.vue'
+</script>
+
+<template>
+  <Pagination
+    v-model="page"
+    :total-pages="totalPages"
+    :total-items="total"
+    :page-size="pageSize"
+    variant="full"
+    layout="toolbar"
+  />
+</template>
+```
+
+Props `Pagination`: `modelValue`, `totalPages`, `totalItems`, `pageSize`, `visibleCount`, `variant` (`full` | `simple`), `layout` (`toolbar` | `stacked` | `nav-only`), `hasNextPage` / `hasPreviousPage` (сервер без известного total).
+
+Props пагинации `DataTable`: `enablePagination`, `currentPage`, `itemsPerPage`, `totalItems`, `hasNextPage`, `hasPreviousPage`.
+
+Сортировка по колонке: `sortable: true` в описании колонки, плюс `sortKey` / `sortDirection` и события `update:sortKey` / `update:sortDirection`. Клик по заголовку переключает направление; на карточках те же поля вынесены полосой над списком. Саму сортировку списка делает страница, `DataTable` только показывает состояние и клики.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Таблицы | [`components.mdc`](../../.cursor/rules/components.mdc) → DataTable |
+| Query-состояние списков | [`client_code.mdc`](../../.cursor/rules/client_code.mdc) |
+| Загрузка без мигания | [`loading-content-area.mdc`](../../.cursor/rules/loading-content-area.mdc) |

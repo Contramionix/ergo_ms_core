@@ -117,10 +117,14 @@ def build_rate_limit_conf(values: Mapping[str, Any]) -> str:
 
 
 def upload_location_limit_lines(*, burst: int, indent: str = '        ') -> str:
-    """Строки limit_req / limit_req_status / limit_conn для location /upload/."""
+    """Строки limit_req / limit_req_status / limit_conn для location /upload/.
+
+    Соединения считаются в ergo_upload_conn, не в общей ergo_conn: иначе
+    открытые сокеты вкладок занимают потолок загрузки.
+    """
     return (
         f'{indent}limit_req zone=ergo_upload burst={burst} nodelay;\n'
         f'{indent}limit_req_status 429;\n'
-        f'{indent}limit_conn ergo_conn 10;\n'
+        f'{indent}limit_conn ergo_upload_conn 10;\n'
         f'{indent}limit_conn_status 429;\n'
     )

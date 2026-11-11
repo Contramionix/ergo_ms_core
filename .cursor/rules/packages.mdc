@@ -17,7 +17,7 @@ alwaysApply: false
 
 ## Обязательно
 
-1. Новый portable-бинарник модуля — объяви в `packages.yaml`, не копируй download/extract в Django management.
+1. Общий portable-инструмент — в `core_packages.yaml`, потребности модулей — в `runtime_requirements.yaml` версии 1. Специфичные инструменты поддерживаются в `modules/<name>/packages.yaml`. Не копируй download/extract в Django management.
 2. `kind: archive` — URL/marker/платформа в YAML; общий installer ядра.
 3. `kind: custom` — скрипт относительно корня модуля или `core/deployment`; запуск **subprocess**, без `import modules.<name>.api`. Если после копирования файлов нужен шаг в уже существующей БД (`CREATE EXTENSION` и т.п.), поставь `always_run: true` и сделай installer идемпотентным: маркер не должен отменять этот шаг.
 4. Пути только через `project_layout` / `package_dir`.
@@ -87,6 +87,13 @@ packages:
 | `ergoms package-status [name]` | Детали |
 | `ergoms package-install <name> [--force] [--refresh]` | Установка |
 | `ergoms package-uninstall <name> [--purge-extra]` | Удаление dest (+ extra_dirs) |
+| `ergoms runtime-check [--json]` | Проверить манифесты и ссылки без установки |
+| `ergoms runtime-install-tools [--include-optional]` | Установка через тот же реестр |
+
+В `setup-full` runtime-инструменты устанавливаются после Python/npm в отдельном
+процессе venv, до загрузки моделей. Старый `packages.yaml` может ссылаться на
+общий инструмент через `<tool>: {use: <tool>}`; переопределение запрещено.
+Схема и правила перехода: [runtime-requirements.md](../../.docs/runtime-requirements.md).
 
 Модульные алиасы (`<name>:install-…`) должны вызывать `package-install` / `package-uninstall`, а не дублировать логику.
 

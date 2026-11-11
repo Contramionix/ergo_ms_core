@@ -1,0 +1,35 @@
+---
+description: UI ядра — поставить, заменить или удалить обложку, аватар и другую картинку — ImageHoverFrame
+alwaysApply: false
+---
+
+# Картинка с заменой и удалением — ImageHoverFrame
+
+Компонент: `@/components/ImageHoverFrame.vue`.
+
+Рекомендуется везде, где картинку ставят, заменяют или удаляют: обложка, аватар, постер, превью. При `editable` наведение затемняет кадр и показывает кнопки. На таче те же кнопки встают под кадром. Без `editable` кадр остаётся на месте, клика нет.
+
+## Обязательно
+
+- Подписи кнопок передавай снаружи. Компонент сам строки не выбирает.
+- `primary` — поставить или заменить. `remove` есть, только если передан `remove-label`.
+- Размер, скругление и фон задаёт класс на самом компоненте. Кадр наследует `border-radius`.
+
+## Запрещено
+
+Свой слой затемнения и свои кнопки «заменить / удалить» поверх такой картинки.
+
+```vue
+<ImageHoverFrame
+  class="journal-cover"
+  :editable="canWrite"
+  :primary-label="hasImage ? editLabel : uploadLabel"
+  :remove-label="hasImage ? deleteLabel : ''"
+  @primary="openUpload"
+  @remove="removeImage"
+>
+  <ContentImage v-if="src" :src="src" alt="" />
+</ImageHoverFrame>
+```
+
+`busy` прячет кнопки и показывает слот `busy`. `disabled` глушит обе кнопки.

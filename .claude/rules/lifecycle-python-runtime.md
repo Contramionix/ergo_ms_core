@@ -1,0 +1,143 @@
+---
+paths:
+  - "core/deployment/lifecycle/**"
+  - "core/deployment/scripts/**"
+  - "core/deployment/security/**"
+  - "core/deployment/nginx/**"
+  - "core/deployment/docker/**"
+  - "core/deployment/config_scaffold/**"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Два Python в lifecycle-pipeline
+
+`ergoms setup` и другие рецепты `setup-full` запускаются **до того**, как в проекте появится venv с зависимостями. [`runner.py`](../../core/deployment/lifecycle/runner.py) стартует на любом доступном интерпретаторе — portable CPython (`virtual_env/packages/python/`) или системном — и только по ходу пайплайна создаёт venv ([`CreateVenvStep`](../../core/deployment/lifecycle/steps/host_steps.py)) и ставит туда зависимости, включая PyYAML.
+
+Если шаг **после** `CreateVenvStep` делает `import yaml` (или другой сторонний пакет) прямо в процессе runner — это `ModuleNotFoundError`, потому что runner всё ещё исполняется на **portable**, а не venv Python. Django-команды (`migrate`, `collectstatic`) этой проблемы не имеют: они запускаются **отдельным** subprocess'ом на venv Python через [`host_ops.run_api_command`](../../core/deployment/lifecycle/host/ops.py).
+
+Отдельно ломает setup **eager-import на верхнем уровне модуля**: любая цепочка от `lifecycle` / `config_scaffold` к `import yaml` падает **ещё до первого шага** рецепта. Типичный симптом: `ModuleNotFoundError: No module named 'yaml'` сразу после установки portable Python/Node.
+
+## Кратко
+
+- Portable/системный Python — **bootstrap**: argparse, orchestrator, `cli_locale`, простые файловые операции. Сторонних пакетов может не быть.
+- venv Python (`virtual_env/python/…`) — появляется после `CreateVenvStep`; там же PyYAML, Poetry-зависимости.
+- Любой шаг, которому нужен пакет вроде `yaml` **после** создания venv в этом же рецепте — вызывает его **subprocess'ом на venv Python**, не `import` в процессе runner.
+- Проверка перед вызовом — `host_ops.venv_exists(project_root, platform)`; путь — `host_ops.venv_python_exe(project_root, platform)`.
+- Скрипты в `core/deployment/scripts/`, которые читает шаг (например [`module_tasks_loader.py`](../../core/deployment/scripts/module_tasks_loader.py), `host_lifecycle_loader.py`, `process_roles_loader.py`), уже умеют работать как самостоятельный CLI (`--root`, `--json`) — используй этот CLI из subprocess, не импортируй модуль напрямую.
+- Граф импортов bootstrap (runner, `lifecycle`, `config_scaffold`, шаги до `python-install`) **не должен** транзитивно тянуть `import yaml` / Poetry-пакеты на уровне модуля.
+
+## Цепочка импортов bootstrap (не ломать)
+
+При правках `lifecycle/**`, `security/**`, `nginx/**`, `docker/**`, `config_scaffold/**` проверь, что **импорт пакета `lifecycle` или запуск `runner.py --list`** на portable Python **без** PyYAML не падает.
+
+Эталонные обходы (уже в коде):
+
+| Место | Как |
+|---|---|
+| [`lifecycle/docker/ops.py`](../../core/deployment/lifecycle/docker/ops.py) | `render_common` — только внутри `render_nginx_docker_config`, не на верхнем уровне |
+| [`security/__init__.py`](../../core/deployment/security/__init__.py) | lazy `__getattr__` для catalog / profile_defaults (не тянуть PyYAML при `from security.csp_policy`) |
+| [`docker/docker_runtime.py`](../../core/deployment/docker/docker_runtime.py) | `_yaml()` — ленивый `import yaml` |
+| [`cli_locale.py`](../../core/deployment/cli_locale.py) | `try/except ImportError` вокруг `yaml` |
+
+```text
+BAD — setup падает до первого шага
+runner / recipes / common_steps
+  → docker/ops (top-level from render_common)
+    → nginx/render_common
+      → security/__init__ (eager catalog)
+        → catalog.py: import yaml
+```
+
+```python
+# BAD — top-level в модуле, который тянет recipes / common_steps
+from render_common import render_docker_nginx_config
+
+# BAD — security/__init__.py тянет catalog при любом from security.*
+from .catalog import SecurityCatalog, load_security_catalog
+
+# GOOD — ленивый импорт в точке использования
+def render_nginx_docker_config(raw_env: dict[str, str]) -> Path:
+    from render_common import render_docker_nginx_config  # noqa: WPS433
+    ...
+
+# GOOD — пакет security без eager catalog; csp_policy остаётся stdlib-only на top-level
+```
+
+Проверка после правки импортов (portable Python, без venv-зависимостей):
+
+```text
+virtual_env/packages/python/python.exe -c "import yaml"
+→ ModuleNotFoundError  (ожидаемо)
+
+PYTHONPATH=core/deployment virtual_env/packages/python/python.exe core/deployment/lifecycle/runner.py --list
+→ список рецептов без traceback
+```
+
+## Обязательно
+
+- Перед subprocess-вызовом на venv — `if not host_ops.venv_exists(...):` и явный `[ERROR]` (`StepResult(exit_code=1, ...)`), не тихий пропуск.
+- Результат subprocess с `--json` — разбирать через `json.loads` с `try/except json.JSONDecodeError`, а не доверять stdout напрямую.
+- Ошибку subprocess (`returncode != 0`) — пробрасывать в консоль (`stderr`) и завершать шаг ненулевым кодом, не проглатывать.
+- Новый top-level `import` в файлах из globs этого правила — сначала убедись, что модуль **не** входит в граф bootstrap `lifecycle` / scaffold; иначе — lazy import, `try/except ImportError` или subprocess на venv.
+
+## Запрещено
+
+```python
+# BAD — импорт пакета с зависимостью от PyYAML внутри процесса runner
+class SomeSetupStep(DeploymentStep):
+    def run(self, ctx: DeploymentContext) -> StepResult:
+        from some_loader import aggregate  # тянет `import yaml` на верхнем уровне
+        data = aggregate(ctx.project_root)  # ModuleNotFoundError на portable Python
+        ...
+```
+
+```python
+# BAD — «удобный» top-level import хелпера, который тянет security/catalog или YAML
+# в docker/ops, common_steps, recipes, lifecycle/__init__, config_scaffold
+from render_common import render_docker_nginx_config
+from security.catalog import load_security_catalog
+```
+
+Не «чини» setup установкой PyYAML в portable Python и не переноси runner целиком на venv до `CreateVenvStep` — bootstrap как раз создаёт venv.
+
+## Базовый пример (шаг после venv)
+
+Эталон — [`ModuleSetupTasksStep`](../../core/deployment/lifecycle/steps/module_tasks_steps.py): список задач модулей грузится через venv Python и CLI `module_tasks_loader.py --json`, а не через `from module_tasks_loader import tasks_for_target`.
+
+```python
+# GOOD — subprocess на venv Python, без import стороннего пакета в процессе runner
+def _load_tasks(self, ctx: DeploymentContext) -> list[dict] | None:
+    venv_py = host_ops.venv_python_exe(ctx.project_root, ctx.platform)
+    result = subprocess.run(
+        [str(venv_py), str(_MODULE_TASKS_LOADER), '--root', str(ctx.project_root),
+         '--json', '--target', _INCLUDE_SETUP_FULL],
+        cwd=str(ctx.project_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    tasks = payload.get('tasks')
+    return tasks if isinstance(tasks, list) else None
+```
+
+## Когда import в процессе runner допустим
+
+- Модуль использует только стандартную библиотеку (`json`, `re`, `pathlib`) — без сторонних пакетов.
+- Шаг гарантированно выполняется **после** re-exec / отдельного вызова на venv Python (например, шаги, вызываемые только через `ergoms api …` или `run_api_command`, которые уже в venv).
+- `cli_locale.py` и аналогичные модули bootstrap-уровня уже обрабатывают отсутствие PyYAML через `try: import yaml except ImportError: yaml = None` — следуй этому паттерну, если модуль обязан работать **и** на portable, **и** на venv Python.
+- Хелпер нужен только в редкой ветке (рендер nginx Docker, чтение `profiles.yaml`) — ленивый import **внутри функции**, не на верхнем уровне файла, который грузит recipes.
+
+## Связанные правила
+
+| Тема | Файл |
+|---|---|
+| Пайплайн, шаги, рецепты | [`lifecycle-pipeline.mdc`](../../.cursor/rules/lifecycle-pipeline.mdc) |
+| venv, portable Python | [`virtual-env.mdc`](../../.cursor/rules/virtual-env.mdc) |
+| Модульные задачи `vscode.tasks.yaml` | [`module-vscode-tasks.mdc`](../../.cursor/rules/module-vscode-tasks.mdc) |
+| Windows / Linux | [`oc.mdc`](../../.cursor/rules/oc.mdc) |

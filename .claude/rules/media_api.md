@@ -1,0 +1,116 @@
+---
+paths:
+  - "core/media_api/**"
+  - "core/api/src/core/utils/media_client/**"
+  - "core/api/src/core/utils/media_signing.py"
+  - "core/api/src/core/utils/media_views.py"
+  - "core/api/src/core/utils/media_storage.py"
+  - "core/api/src/core/utils/media_upload_quota.py"
+  - "core/api/src/core/utils/media_upload_validation.py"
+  - "core/shared/media_hmac.py"
+  - "env/media.env*"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Файлы и media_api
+
+Медиа раздаёт отдельный сервис `core/media_api` (порт 8003). Через основной API по `/media/` — **нельзя**.
+
+## Отдача файла
+
+По умолчанию storage уже подписанный URL. Для строкового пути:
+
+```python
+from src.core.utils.media_signing import get_signed_media_url
+url = get_signed_media_url('path/to/file.jpg')
+# за nginx — относительный /serve/..., не http://NGINX_PUBLIC_HOST/serve/...
+```
+
+## Загрузка (сервер)
+
+ViewSet + `MediaApiFileMixin`. Сериализатор принимает поле и `<поле>_path`.
+
+## Загрузка (клиент)
+
+```javascript
+import { mediaApiClient } from '@/js/api/media-api-client'
+const { path } = await mediaApiClient.upload(file, { targetDir: '<name>/attachments' })
+```
+
+Класс квоты ставит ядро по `target_dir` (группа `media.upload_quota_policies`). Клиент **не** передаёт `quota`. Частота модуля — в `modules/<name>/.env`, не в `MEDIA_API_UPLOAD_RATE` / `_ADMIN`. Потолок токена и nginx `/upload/` — `MEDIA_API_UPLOAD_RATE_CEILING` (после смены: `ergoms reload-nginx`).
+
+При `MODULE_RUNTIME=microservice` токен для `target_dir`, который начинается с имени из `MICROSERVICE_MODULES`, клиент берёт у процесса модуля (`/api/<name>/media/upload-token/`). `upload_url` тогда `/upload/<name>/`, не общий `/upload/`. Остальные загрузки (аватары, вложения ядра) идут в `utils/media/upload-token/` и `POST /upload/` на media_api ядра. HMAC считает тот процесс, который делит диск с местным media_api (`API_SECRET_KEY` этого хоста). Если люди открывают nginx ядра, а файлы модулей на другом хосте, на ядре нужны `NGINX_MEDIA_UPSTREAM=<nginx пира>` и `ergoms reload-nginx`: в `upstream` уедут только `/upload/<name>/` и `/serve/<name>/`. Не расширяй `connect-src`, чтобы слать upload на IP пира.
+
+## Скачивание (клиент)
+
+Единый хелпер — [`mediaDownload.js`](../../core/client/src/js/utils/mediaDownload.js). **Не** открывай signed URL через `target=_blank` для attachment (вкладка мигает и закрывается). `apiClient` с базой `/api/` не должен ходить на `/serve/` как на эндпоинт API: иначе получится `/api/serve/…` (404). Интерцептор в `manager.js` снимает эту склейку; лучше сразу `downloadMedia`.
+
+```javascript
+import { downloadMedia, downloadMediaFromResult, MEDIA_DOWNLOAD_MODE } from '@/js/utils/mediaDownload.js'
+
+// по умолчанию: тихое скачивание (iframe + ?download=1)
+await downloadMediaFromResult({ download_url, filename })
+
+// режимы: attachment | blob | new_tab
+await downloadMedia(url, { mode: MEDIA_DOWNLOAD_MODE.NEW_TAB })
+```
+
+| Режим | Когда |
+|-------|--------|
+| `attachment` | скачать файл без ухода со SPA |
+| `blob` | fetch → `downloadBlob` (контроль имени; не для очень больших файлов) |
+| `new_tab` | открыть для просмотра (без force `download=1`) |
+
+## Три слоя (не смешивать)
+
+| Слой | Назначение |
+|------|------------|
+| Постоянные файлы | media_api, signed URL |
+| Временные (обработка) | `ScratchStore` на воркере |
+| Результат пайплайна | снова в media_api через `commit_local` |
+
+## Тяжёлая обработка (видео, документы)
+
+```python
+from src.core.utils.media_client import get_media_client, get_scratch_store
+
+client = get_media_client()
+with get_scratch_store().session('job') as workdir:
+    src = client.localize(path_in_db)
+    # обработка локальным путём src.path
+    stored = client.commit_local(str(out_file), 'module/results/name.ext')
+    src.release()
+```
+
+Не пиши в `MEDIA_ROOT` через `open()` из бизнес-кода модуля.
+
+## Режимы
+
+В корневом `.env`: `ERGO_MEDIA=local|remote` (явный `MEDIA_ACCESS_MODE` перекрывает).
+
+- `local` — API читает/пишет файлы на том же сервере
+- `remote` — через internal API media_api, нужен `MEDIA_API_INTERNAL_KEY`
+
+Зоны — локальный [`media_zones.yaml`](../../media_zones.yaml) по образцу [`media_zones.yaml.example`](../../media_zones.yaml.example). В git сценарий машины не класть. Префикс пути целиком живёт в другом корне: `mode: remote` и `base_url`, либо `mode: local` и абсолютный `root`. Самый длинный префикс побеждает. Пока файла на той стороне нет, чтение берёт местный диск. Новая запись удалённой зоны сразу уходит туда. Перенос: `ergoms api relocate_media_zone`, несколько файлов сразу — `--workers` (от 1 до 32, по умолчанию 1). На принимающей машине свой локальный `media_zones.yaml`: те же префиксы с `mode: local` и каталогом на диске, без чужого `base_url`. Ключ `MEDIA_API_INTERNAL_KEY` тот же.
+
+На хосте только модулей (`HOST_PROFILE=modules`, `HOST_MEDIA=on`) оставляйте `ERGO_MEDIA=local`: байты модуля пишутся в местный media_api. Не ставьте на этом хосте `ERGO_MEDIA=remote` «чтобы достучаться до ядра» — тогда модуль снова будет искать файлы не там, куда их загрузил браузер.
+
+Детали (`MEDIA_API_*`, лимиты): [`env/media.env.example`](../../env/media.env.example).
+
+Пакеты справки для ассистента пишет процесс через `MediaClient` в `knowledge/<owner>/`. Браузерный upload-токен с `target_dir`, который начинается с `knowledge`, отвергается. На двух хостах сосед читает чужой пакет по `core.knowledge.sign_read` / `knowledge.sign_read.<name>`; адрес своего media_api для пира — `MEDIA_API_ADVERTISE_URL`.
+
+## Запрещено
+
+- URL через `MEDIA_URL` или `/media/...` в основном API
+- `request.FILES` без поддержки `*_path` от media_api
+- Временные файлы внутри пользовательской папки media
+- Загрузка из браузера в каталог `knowledge/`
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Безопасность файлов | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| Квоты модулей | [`module-contracts.mdc`](../../.cursor/rules/module-contracts.mdc) |
+| README сервиса | [`core/media_api/README.md`](../../core/media_api/README.md) |
+| Архитектура | [`.docs/architecture.md`](../../.docs/architecture.md) |

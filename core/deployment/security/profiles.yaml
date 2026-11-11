@@ -512,7 +512,7 @@ controls:
     status: partial
     check: code_fixed
 
-  - id: messenger.access_default
+  - id: chat.access_default
     layer: api
     title: Доступ к мессенджеру по умолчанию
     kind: policy

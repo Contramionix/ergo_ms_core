@@ -14,6 +14,12 @@
 
 ## Локальная разработка
 
+Общие инструменты модулей: `ergoms runtime-check [--json]` проверяет
+`runtime_requirements.yaml`, `ergoms runtime-install-tools` ставит обязательные
+инструменты через существующий реестр; `--include-optional` включает остальные.
+Этот шаг входит в `ergoms setup`. Прежние `package-*` и модульные алиасы
+сохранены. Подробнее: [runtime-requirements.md](runtime-requirements.md).
+
 Для запуска API с прогревом кэшей выполните:
 
 ```cmd
@@ -36,6 +42,18 @@ ergoms celery-balance --dry-run
 ```
 
 `celery-balance` показывает очереди, бюджет RAM/CPU и рекомендуемый concurrency. По умолчанию (`CELERY_BALANCE=auto`) при старте worker читается overlay; yaml — fallback и режим `off`. Подробнее — `ergoms help` и `.cursor/rules/celery-balance.mdc`.
+
+В `celery_workers.yaml` у воркера с `pool: prefork` можно задать `max_tasks_per_child` и `max_memory_per_child` (килобайты). `ergoms start-worker` передаёт их Celery, и процесс перезапускается, когда наберёт столько задач или памяти. Для пула `threads` эти ключи не действуют.
+
+Если задачу модуля оборвал перезапуск воркера или `ergoms`, она сама не начинается заново, а ждёт решения. Что делать с ней, модуль задаёт в `modules/<name>/task_restart.yaml`: отложить (`hold`, по умолчанию), выбросить (`drop`, для периодических задач) или выполнить сразу (`requeue`). Отложенные задачи:
+
+```cmd
+ergoms celery-parked
+ergoms celery-parked --resume <id>
+ergoms celery-parked --drop <id>
+```
+
+При `--resume` задача уходит в ту же очередь с `resume=True`, если её функция принимает этот параметр, и продолжает с чекпоинта. Вернуть прежний автоперезапуск для всех задач — `CELERY_RESTART_HOLD=off` в `env/celery.env`.
 
 Полный набор для разработки (API, клиент, Media API, worker, beat; Redis, Meilisearch и JupyterLab — если включены в `.env`) одной командой:
 
@@ -67,7 +85,7 @@ BRIDGE_SERVICE_URLS=<peer>=http://peer.example:8000
 
 Не добавляйте `<peer>` в `MICROSERVICE_MODULES` на этом хосте. Токен `BRIDGE_INTERNAL_TOKEN` одинаковый на обоих концах. Пользователей связывают по `public_id`.
 
-**Microservice (приближение к боевому).** Отдельный API модуля за nginx, HTTP-мост, worker только своей очереди. Соседи на этой машине (`127.0.0.1` / тот же хост) при `BRIDGE_COLOCATE=auto` вызываются в процессе; на другой сервер уходит HTTP.
+**Microservice (приближение к боевому).** Отдельный API модуля за nginx, HTTP-мост, worker только своих очередей. Соседи на этой машине (`127.0.0.1` / тот же хост) при `BRIDGE_COLOCATE=auto` вызываются в процессе; на другой сервер уходит HTTP. Если в модуле есть `celery_workers.yaml`, `start-worker --module` поднимает общий воркер и каждый именованный отдельно; `--worker=<id>` запускает или, у `stop-worker`, останавливает только его.
 
 ```cmd
 MODULE_RUNTIME=microservice
@@ -77,6 +95,8 @@ BRIDGE_TRANSPORT=http
 BRIDGE_EVENT_BUS=redis
 ergoms start-module --module=<name>
 ergoms start-worker --module=<name>
+ergoms start-worker --module=<name> --worker=<id>
+ergoms stop-worker --module=<name> --worker=<id>
 ergoms docker-gen-modules
 ```
 
@@ -147,7 +167,7 @@ ergoms help modules
 ergoms help module <имя>
 ```
 
-Общая справка по ядру: `ergoms help`.
+Общая справка по ядру показывает разделы: `ergoms help`. Команды раздела — `ergoms help <раздел>`, полный список — `ergoms help all`.
 
 ## Режимы безопасности (этап 0)
 
@@ -349,6 +369,10 @@ ergoms deploy-all
 
 `restore-menu` — восстановление пунктов бокового меню из миграций. `maintenance-on/off` — режим технических работ без перезапуска служб; `maintenance-status` — текущее состояние. `logs-status` — сколько места занимает каталог `logs/`. `rotate-logs` — ротация infra-журналов по размеру и сжатие копий; `install-infra-log-rotate` — планировщик ротации (по умолчанию каждый час). `invalidate-caches-warmup` — сброс кэшей ядра и прогрев.
 
+Перед запросом на слияние запустите `ergoms ci`. Команда сначала проверяет lock-файлы и останавливается, если они не сходятся. Дальше одновременно идут правила ядра, unit-тесты развёртывания, стиль клиента и клиентские тесты модулей: ошибка любой из этих проверок завершает команду. `ergoms ci-nightly` повторяет эти проверки и со строгим режимом поднимает сценарии `host_sqlite_direct` и `docker_direct`, проверку безопасности и вход в браузере. Пропуск обязательной проверки в ночном прогоне завершает команду с ошибкой. Планировщик операционной системы `ci-nightly` не включает.
+
+`ergoms deploy-api` и `ergoms deploy-all` перед миграцией снимают копию баз и записывают версии корня и submodule в `logs/deploy-revision.txt`. Рецепт процессы не стартует. После `ergoms start` готовность смотрят по адресу `/api/system/ready/`.
+
 ## Системные службы (Linux / Windows)
 
 Чтобы зарегистрировать API, клиент, Celery и media_api как службы операционной системы, нужны права администратора:
@@ -374,7 +398,7 @@ migrate-all=api:makemigrations && api:migrate
 install-deps=api:install && npm:run install:all && api:migrate && api:warmup_caches
 ```
 
-Команды `dev` и `start-client` вызывают скрипты в `core/api/scripts/` и `core/deployment/scripts/` (см. `commands.conf`). Команды **nginx**, **redis** и **TLS** — встроенные в `ergo_ms.ps1` / `ergo_ms.sh`; полный список — `ergoms help`.
+Команды `dev` и `start-client` вызывают скрипты в `core/api/scripts/` и `core/deployment/scripts/` (см. `commands.conf`). Команды **nginx**, **redis** и **TLS** — встроенные в `ergo_ms.ps1` / `ergo_ms.sh`; полный список — `ergoms help all`.
 
 Новую команду ядра добавляют в `commands.conf` и описание — в `core/deployment/help.manifest.yaml`. Команду модуля — в `ergoms.conf` и `ergoms.help.yaml` соответствующего модуля.
 

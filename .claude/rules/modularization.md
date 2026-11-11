@@ -1,0 +1,78 @@
+---
+paths:
+  - "modules/*/api/schema.yaml"
+  - "modules/*/api/bridge_manifest.yaml"
+  - "modules/*/api/models.py"
+  - "core/api/src/core/integrations/**"
+  - "core/api/src/core/utils/database/**"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Модульность процессов и данных
+
+По умолчанию разработка — **монолит**: `MODULE_RUNTIME=monolith`, `BRIDGE_TRANSPORT=local`. Не переключай runtime «заодно» с доменной задачей.
+
+Уровни, ADR, пилот и чеклист выноса — [`.docs/modularization.md`](../../.docs/modularization.md). Имена установленных модулей в этом правиле **не** пиши: только `<name>`.
+
+## Кратко
+
+- Связь модулей и ядра — ModuleBridge (JSON-примитивы по HTTP: `user_public_id`, не ORM и не `request.user`).
+- Сосед на другом сервере при монолите на этом хосте: `BRIDGE_TRANSPORT=http` и ключ в `BRIDGE_SERVICE_URLS`. Это закрывает `requires` без checkout папки. Не пиши удалённое имя в `MICROSERVICE_MODULES`.
+- Несколько процессов на одной машине и соседи на другой: `BRIDGE_COLOCATE=auto` (по умолчанию при `http`). Loopback и тот же хост вызываются в процессе; URL на другом сервере — HTTP. Выключить: `BRIDGE_COLOCATE=off`. Процесс модуля в `search_path` держит свою схему, схемы таких соседей и `core` — иначе локальный handler не видит чужие таблицы.
+- Схема модуля — `m_<name>` (hook `api/schema.yaml`). Ядро — схема `core`. Схемы `public` нет. SQLite схемы не использует. Даже в монолите таблицы модуля живут в `m_<name>` (migrate ставит схему приложения первой). Физический перенос без запрета FK — `isolated: false`.
+- Изолированный модуль (`isolated: true`) не ставит `ForeignKey` / `OneToOne` на чужой `app_label` и не на `AUTH_USER_MODEL`. Владелец пользователя — ядро; в модуле — `user_public_id`.
+- `Meta.db_table` **без** префикса схемы (иначе сломается SQLite).
+- Отдельная БД — поле `module:` в `databases.yaml`, не хардкод alias в ядре.
+- Worker модуля — `ergoms start-worker --module=<name>`: очереди модуля, которые не отданы именованным воркерам из `celery_workers.yaml`. Один воркер — `--worker=<id>`.
+- Периодические задачи модуля — `ergoms start-beat --module=<name>` на хосте модуля. Общий Beat ядра в microservice **не** планирует `MICROSERVICE_MODULES`.
+
+## Обязательно
+
+| Нужно | Как |
+|-------|-----|
+| Вынести процесс | `bridge_manifest.yaml`, `MICROSERVICE_MODULES=<name>`, `ergoms start-module --module=<name>` |
+| Хост только модулей | `HOST_PROFILE=modules` (или `auto` при `NGINX_API_UPSTREAM` + `BRIDGE_CORE_URL` + `MICROSERVICE_MODULES`). `ergoms start-api`, оболочка Vite и общий Beat ядра отказываются. Остаются `start-module` / `start-worker --module` / `start-beat --module`. `install-services` ставит API, worker и при наличии `celery_beat_config.py` — Beat модуля |
+| Ужать Django модуля | На хосте без службы `api` процесс `module:<name>` сам берёт `slim`. Явный `MODULE_PROCESS_PROFILE=full` побеждает. Extras — `MODULE_PROCESS_CORE_EXTRA` или `api/process_profile.yaml` |
+| Изолировать данные | `api/schema.yaml`, снять FK наружу (`isolated: true`), `ergoms db-migrate-module` / `db-move-module-schema` / `db-move-core-schema` |
+| Удаление пользователя | подписка на `core.user_delete` по `user_public_id` / `user_id`, не ORM `user=` |
+| HTTP-мост | kwargs JSON-сериализуемые (`user_public_id`); объект `user=` локально оставляй; при отсутствии провайдера — `default` |
+| Сосед на другом хосте | `BRIDGE_SERVICE_URLS=<name>=http://peer.example:8000`, общий `BRIDGE_INTERNAL_TOKEN`, один `public_id`; URL — Django во внутренней сети |
+| Уровень 3 | `MODULE_AUTH_MODE=jwt_claims`, outbox до отдельной БД |
+
+## Запрещено
+
+```python
+# BAD — ORM в HTTP-мосте
+bridge.call('session.restore_claims', user=request.user)
+
+# BAD — FK на пользователя ядра в изолированном модуле
+user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+# BAD — схема в db_table (SQLite)
+class Meta:
+    db_table = 'm_example.my_table'
+```
+
+```python
+# GOOD
+bridge.call('session.restore_claims', user_public_id=str(user.public_id), default={})
+
+class Item(models.Model):
+    user_public_id = models.UUIDField(db_index=True)
+```
+
+```yaml
+# GOOD — modules/<name>/api/schema.yaml
+schema: m_<name>
+isolated: true
+```
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Изоляция ядра | [`core-module-isolation.mdc`](../../.cursor/rules/core-module-isolation.mdc) |
+| Мост и контракты | [`module-contracts.mdc`](../../.cursor/rules/module-contracts.mdc), [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Celery | [`celery.mdc`](../../.cursor/rules/celery.mdc) |
+| Поиск | [`search.mdc`](../../.cursor/rules/search.mdc) |
+| Команды | [`no-direct-manage-py.mdc`](../../.cursor/rules/no-direct-manage-py.mdc) |

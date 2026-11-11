@@ -1,0 +1,11 @@
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Общие правила кода
+
+- Тесты и точечные правки — только по просьбе. Правки развёртывания, `commands.conf`, служб, docker/nginx и security стека сопровождай `ergoms system-test` — [`system-test.mdc`](../../.cursor/rules/system-test.mdc).
+- Файл не длиннее 700 строк. Режь по ответственности, не по номеру строки. Общие константы — в один модуль. Импорты именованные и вверху файла. Не обрывай `def` или `class` посередине.
+- Повторяющийся сценарий выноси в общий класс. Тяжёлую работу отдавай Celery. Часовой расчёт не запускай в shell Cursor — [`long-running-jobs.mdc`](../../.cursor/rules/long-running-jobs.mdc).
+- Данные приложения пиши внутри корня репозитория, не в `/tmp` и `/etc` — [`project-root-artifacts.mdc`](../../.cursor/rules/project-root-artifacts.mdc).
+- В командах и логах без эмодзи. После задачи убери мёртвый код и неиспользуемые импорты.
+- `request.user` в сериализаторе бери через `SwaggerSafeSerializerMixin.get_safe_user()`. Новый ViewSet — `BaseModelViewSet`, фильтр выборки в `get_queryset` или `owner_field`.
+- Комментарий объясняет «почему». Подробности API — [`api_code.mdc`](../../.cursor/rules/api_code.mdc).

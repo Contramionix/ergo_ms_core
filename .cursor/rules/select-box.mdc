@@ -77,7 +77,9 @@ const STATUS_OPTIONS = [
 | `value-key` / `label-key` | объекты `{ id, name }` (по умолчанию `id` / `name`) |
 | `include-all-option` | `false` — без пустого пункта; `true` + `all-label` — «не выбрано» / «все» |
 | `cast-to-number` | числовые id из API |
-| `searchable` | длинные списки |
+| `searchable` | длинные списки; поле фильтра — `SearchInput` (`layout="fill"`) внутри меню |
+| `filter-local-options="false"` | удалённый поиск через `@search` — не резать `options` локально |
+| `@load-more` | удалённая догрузка: событие при прокрутке списка к низу (родитель сам решает, есть ли ещё страница) |
 | `multiple` | множественный выбор |
 | `show-checkboxes-when-multiple` | чекбоксы в multi-режиме |
 | `multiple-label-format="count"` | «N выбрано» вместо длинного списка |
@@ -87,6 +89,7 @@ const STATUS_OPTIONS = [
 | `option-indent-per-level` | доп. отступ вложенных пунктов, rem; по умолчанию **`0`** |
 | `nested-option-font-size` / `nested-secondary-font-size` | размер шрифта вложенных строк; пусто — как у списка |
 | `disabled` | недоступное поле |
+| `menu-mode` | `compact` (по умолчанию) — список не выше 260px; `screen` — список тянется до края окна |
 
 ## Иерархические опции
 

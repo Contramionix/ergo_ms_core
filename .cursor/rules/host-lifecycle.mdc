@@ -65,7 +65,7 @@ host:
 | Поле | Смысл |
 |------|--------|
 | `stop_commands` | `ergoms stop` / `Stop-AllErgoms` / конец `setup-full` — доп. остановка процесса; при `ergoms stop` и установленных `service_units` не вызывается, если все unit уже inactive |
-| `install_service_commands` | шаг модульных служб в `ergoms install-services` и в `install_test.ps1`. Команды `install-module-service` (`--kind=api\|worker\|beat`) — только при `MODULE_RUNTIME=microservice` и имени в `MICROSERVICE_MODULES`. `HOST_PROFILE=modules` допускает `module_api`, `module_worker` и `module_beat` |
+| `install_service_commands` | шаг модульных служб в `ergoms install-services` и в `install_test.ps1`. Команды `install-module-service` (`--kind=api\|worker\|beat`) — только при `MODULE_RUNTIME=microservice` и имени в `MICROSERVICE_MODULES`. `HOST_PROFILE=modules` допускает `module_api`, `module_worker` и `module_beat`. `--kind=worker` ставит общий unit и по unit на каждый id из `celery_workers.yaml`; loader сам добавляет эти unit в start/stop/status |
 | `uninstall_service_commands` | шаг модульных служб в `ergoms uninstall-services` (парно с install) |
 | `service_units` | имена OS-служб в `ergoms start` / `stop` / `restart` / `status` (если unit установлен). Unit'ы API/worker/beat модуля в списке start/stop только в microservice-режиме |
 

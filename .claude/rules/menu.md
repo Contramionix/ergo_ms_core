@@ -1,0 +1,138 @@
+---
+paths:
+  - "core/client/src/components/menu/**"
+  - "**/menu/migration_utils.py"
+  - "**/*_menu*.py"
+  - "**/menuService.js"
+  - "**/MenuPanel.vue"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Боковое меню
+
+Боковое меню — часть ядра. Модули **не** создают свой sidebar. Пункты sidebar хранятся в БД (`MenuItem`, `MenuSeparator`) и отдаются API; клиент только отображает их в `MenuList`.
+
+## Кратко
+
+- **Регистрация пунктов модуля** — миграция данных API через `MenuMigrationHelper` (`core/api/src/core/cms/adp/menu/migration_utils.py`). Процесс модуля отдаёт то же дерево в группе `menu.catalog`; кнопка в CMS забирает его с живых сервисов
+- **Каталог vs layout** — `MenuItem`/`MenuSeparator` (seed) + `MenuLayoutPlacement`/`MenuSeparatorLayout` (порядок, parent, видимость, якоря разделителей). Ключ — `catalog_key`, не PK/`public_id`
+- **Маршруты Vue** — `modules/<имя>/client/js/routes.js` (обязательно для навигации)
+- **Рантайм** — `UserMenuView` → `getUserMenu()` → `MenuList` (поля order/parent материализованы из layout)
+- Порядок, видимость, разделители — в CMS (`MenuPanel.vue`); при reorder/restore layout сохраняется
+- Доступ пунктов и разделителей — `allowed_roles` / `allowed_role_groups` (пустые = всем); user-menu фильтрует оба
+- Свёрнутость sidebar — UI-преференс в `localStorage` (`menu-sidebar-collapsed`), см. [`security-details.mdc`](../../.cursor/rules/security-details.mdc)
+- Тип `offcanvas` — боковая панель через `openOffcanvasSidebar`, не отдельный маршрут
+- Бейдж справа в строке — ModuleBridge-группа `menu.item_trailing`; ядро рисует число слева от стрелки группы. Стрелку по-прежнему прячут без наведения, число нет
+
+## Обязательно
+
+- Новые пункты sidebar модуля — **миграция API** с `MenuMigrationHelper` и `module_source='modules/<имя>'`
+- Эталон: `modules/<name>/api/migrations/*_add_menu.py`
+- Ядро CMS: [`0007_populate_core_menu.py`](../../core/api/src/core/cms/adp/migrations/0007_populate_core_menu.py)
+- Каждый пункт меню ссылается на **`routeName`** из `routes.js` модуля
+- Подпись в UI — из `meta.titleKey` маршрута (`resolveMenuItemTitle`); в миграции имя на русском остаётся запасным вариантом в БД
+- Иконки — имена Lucide (PascalCase); рендер — `LucideIcon`, preload — `@/config/icons-mapping.js` ([`icons.mdc`](../../.cursor/rules/icons.mdc))
+- После правок в админке — событие `menu-updated` или перезагрузка страницы
+- Навигация из меню — `safeNavigateByName` / `routeName`, не хардкод path с pk
+- После добавления миграции меню — `ergoms migrate-all`
+
+## Запрещено
+
+```vue
+<!-- BAD — свой sidebar в модуле -->
+<aside class="module-sidebar">...</aside>
+
+<!-- BAD — числовой id в ссылке из пункта меню -->
+router.push(`/users/${user.id}`)
+```
+
+Дублировать `MenuList`, `MenuGroup`, `MenuItem` в модуле.
+
+## Цепочка данных
+
+1. **Миграция / restore**: upsert каталога по `catalog_key` (с процесса модуля через `menu.catalog` или с диска ядра); layout-таблицы не wipe’атся
+2. **Материализация**: `layout_service.materialize_all_layouts` / helper при create — order/parent/`before_catalog_key` на каталог
+3. **API**: `UserMenuView` — фильтр пунктов и разделителей по правам (`user_menu_builder` / `MenuAccessChecker`); админ CRUD пишет и каталог, и layout
+4. **Клиент**: `getUserMenu()` → `transformMenuData()` / `transformSeparators` (якорь `before_catalog_key`) → `MenuList`
+5. In-memory кеш прогревается в `main.js`; `peekCachedMenu()` — отрисовка без мигания
+
+Composables UI sidebar: `useMenuWidth`, `useMenuNavigation`, `useMenuCollapsedPreference`, `menuLayoutMeasure.js`.
+
+### catalog_key
+
+| Источник | Формат |
+|---|---|
+| Seed route | `{module_source}::route::{route_name}` |
+| Seed offcanvas | `{module_source}::offcanvas::{page}` |
+| Seed folder | `{module_source}::folder::…` |
+| Seed separator | `{module_source}::separator::{slug(name)}` |
+| Админ | `admin::{public_id}` / `admin::separator::{public_id}` |
+
+`restore_menu` и `clear_module_items` удаляют seed-каталог, но не `MenuLayoutPlacement` / `MenuSeparatorLayout`; админские `admin::*` пункты сохраняются. Для вынесенного модуля ядро сначала берёт снимок с процесса (`bridge.all('menu.catalog')`), и только если соседа нет — проигрывает миграции с диска ядра. Имя в `DISABLED_MODULES` прячет пункты, только когда процесса модуля нет: `MICROSERVICE_MODULES` и ключ `BRIDGE_SERVICE_URLS` оставляют вкладки в меню пользователя.
+
+## Миграция меню — базовый пример
+
+```python
+# modules/<name>/api/migrations/0002_menu_data.py
+from django.db import migrations
+
+
+def populate_menu(apps, schema_editor):
+    from src.core.cms.adp.menu.migration_utils import MenuMigrationHelper
+
+    helper = MenuMigrationHelper(apps, 'modules/<name>')
+    helper.clear_module_items()
+    root = helper.create_group('Мой модуль', 'MyModuleHome', icon='LayoutGrid')
+    helper.create_routes_batch([
+        ('Список', 'MyModuleList', 'List'),
+    ], parent=root)
+
+
+def reverse_populate_menu(apps, schema_editor):
+    from src.core.cms.adp.menu.migration_utils import MenuMigrationHelper
+    MenuMigrationHelper(apps, 'modules/<name>').clear_module_items()
+
+
+class Migration(migrations.Migration):
+    dependencies = [('cms_adp', '0007_populate_core_menu')]
+    operations = [migrations.RunPython(populate_menu, reverse_populate_menu)]
+```
+
+## Бейдж справа в строке
+
+Число непрочитанных (и другие хвостовые виджеты) — группа `menu.item_trailing`, не правка `MenuItem` / `MenuGroup` в модуле. Ядро ставит бейдж на совпавший `routeName` и на родительские группы, слева от стрелки. Ноль скрыт. Стрелку по-прежнему прячут без наведения. Кружок — `--ui-accent` / `--ui-accent-text`, не `--bs-danger`.
+
+```js
+import { MENU_ITEM_TRAILING_GROUP } from '@/integrations/moduleContracts.js'
+
+bridge.provideMany(MENU_ITEM_TRAILING_GROUP, '<name>_unread', {
+  id: '<name>_unread',
+  match: { routeName: 'MyModuleList' },
+  order: 10,
+  count: () => unreadTotal.value,
+  title: () => tGlobal('<name>.menu.unread', { count: unreadTotal.value }),
+  route: { name: 'MyModuleList' },
+})
+```
+
+Сбор — [`menuItemTrailing.js`](../../core/client/src/integrations/menuItemTrailing.js). Это не колокольчик уведомлений ядра.
+
+## Меню приложений (AppsMenu)
+
+Не путать с боковым меню. Сетка приложений в toolbar — ModuleBridge-группа `apps.menu.items` ([`appsMenu.js`](../../core/client/src/integrations/appsMenu.js)). Кнопка скрыта, пока пунктов нет; повторная загрузка remote (502) и ожидание снимка прав не отменяются. Пункт можно ограничить UX-полями `permissionModule` + `permission` или `isVisible` (глобальный админ проходит через `hasModulePermission`). Без этих полей пункт виден всем вошедшим. Пока нет access-токена или снимка прав — список не считают окончательно пустым (иначе кнопка пропадает до F5). Сервер всё равно проверяет доступ при открытии. Плавающие виджеты (мини-чат) — отдельно: `shell.floating_widgets` + [`FloatingWidgetsHost`](../../core/client/src/components/FloatingWidgetsHost.vue), не через LayoutPlugin/offcanvas.
+
+## Админка меню
+
+- UI: `core/client/src/core/cms/adp/admin/MenuPanel.vue`
+- CRUD и reorder — API в `core/api/src/core/cms/adp/menu/views.py`
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Иконки Lucide | [`icons.mdc`](../../.cursor/rules/icons.mdc) |
+| Структура модуля, routes.js | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Миграции Django | [`database.mdc`](../../.cursor/rules/database.mdc) |
+| Права на маршруты (UX) | [`permission_rules.mdc`](../../.cursor/rules/permission_rules.mdc) |
+| public_id в URL | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| Архитектура | [`.docs/architecture.md`](../../.docs/architecture.md) |

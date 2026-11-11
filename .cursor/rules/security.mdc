@@ -5,48 +5,13 @@ alwaysApply: true
 
 # Безопасность ERGO MS
 
-**Перед** правками auth, API, прав, файлов, env, CORS, cookies или логов — сверься с этим правилом. Подробности и примеры — [`security-details.mdc`](security-details.mdc).
+Перед правками auth, API, прав, файлов, env, CORS, cookies или логов сверься с этим правилом. Примеры — [`security-details.mdc`](security-details.mdc).
 
-## Кратко
-
-- Конфиденциальные данные только в `.env`, не в коде; серверные ключи не попадают в бандл клиента
-- Токены и контекст сессии — через `tokenStorage.js`, не в localStorage
-- В URL и ссылках — не числовые id из БД, а `public_id` (UUID)
-- API проверяет права сам; клиентские `permission-rules` — только UX
-- Эндпоинт по умолчанию требует JWT (`BaseAPIView` / `BaseModelViewSet`); публичный — только `BaseAPIViewPublicMixin` + allowlist
-- Файлы — через media_api, не `/media/` на основном API
-- Ошибки на клиенте — `logError`, не `console.error(axiosObject)`
-- Prod: `DEBUG=False`, secure cookies, без sourcemap
-
-## Запрещено (неснимаемое)
-
-- Коммитить `.env`, ключи, пароли; хардкодить секреты в коде и чате
-- Фиксировать в git железо хоста (RAM, CPU, GPU, «на этом сервере…») — [`no-host-fingerprint.mdc`](no-host-fingerprint.mdc)
-- `AllowAny` / `BaseAPIViewPublicMixin` / пустые `permission_classes` без явной причины и строки в allowlist
-- pk БД в URL, query, localStorage / sessionStorage / JS-cookie
-- JWT в query WebSocket; токены вне `tokenStorage.js`
-- Прямая раздача `/media/` с основного API
-- Security-исключения «временно» или молча — уточни ([`clarifying-questions.mdc`](clarifying-questions.mdc))
-
-## Чеклист перед завершением задачи
-
-1. Секреты и ID сессии — не в коде, git, browser storage (кроме `tokenStorage.js`).
-2. Снаружи только `public_id` / opaque-ref; контекст сессии из JWT.
-3. API проверяет auth и права; queryset отфильтрован.
-4. Файлы — media_api; пути от клиента валидированы.
-5. Ошибки — `logError` / `logWarn`; без утечки credentials в логах API.
-6. Prod: cookies HttpOnly+Secure+SameSite; CORS/DEBUG/ALLOWED_HOSTS не ослаблены.
-
-## Связанные правила
-
-| Тема | Правило |
-|------|---------|
-| Детали, примеры BAD/GOOD | [`security-details.mdc`](security-details.mdc) |
-| Без отпечатка хоста | [`no-host-fingerprint.mdc`](no-host-fingerprint.mdc) |
-| Логи клиента | [`log-error.mdc`](log-error.mdc) |
-| Логи API | [`logging.mdc`](logging.mdc) |
-| media_api | [`media_api.mdc`](media_api.mdc) |
-| Глобальный админ | [`global-admin.mdc`](global-admin.mdc) |
-| Права маршрутов (UX) | [`permission_rules.mdc`](permission_rules.mdc) |
-| Живые проверки стека | [`system-test.mdc`](system-test.mdc) |
-| Вход в браузере Cursor | [`cursor-browser.mdc`](cursor-browser.mdc) |
+- Секреты только в `.env`, не в коде, git и чате. Серверные ключи не попадают в бандл клиента.
+- Токены и контекст сессии — через `tokenStorage.js`, не в localStorage. JWT не в query WebSocket.
+- Снаружи `public_id` (UUID), не числовой id из БД: ни в URL, ни в query, ни в browser storage.
+- API проверяет права сам. Эндпоинт по умолчанию требует JWT (`BaseAPIView` / `BaseModelViewSet`). Публичный — только `BaseAPIViewPublicMixin` и строка в allowlist.
+- Файлы — через media_api, не `/media/` на основном API.
+- Ошибки клиента — `logError`, не `console.error` объекта axios. В логах API нет credentials.
+- Prod: `DEBUG=False`, cookies HttpOnly, Secure и SameSite, без sourcemap.
+- Железо хоста в git не пиши — [`no-host-fingerprint.mdc`](no-host-fingerprint.mdc). Исключение по безопасности молча не делай.

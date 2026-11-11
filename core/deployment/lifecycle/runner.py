@@ -169,6 +169,14 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
+    from project_isolation import IsolationError, validate_project
+
+    try:
+        validate_project(project_root)
+    except IsolationError as exc:
+        print(format_console('error', str(exc)), file=sys.stderr)
+        return 1
+
     spec = RECIPE_REGISTRY.get(args.recipe)
     if spec is None:
         print(format_console('error', t('unknown_recipe', name=args.recipe)), file=sys.stderr)

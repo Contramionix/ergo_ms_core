@@ -63,7 +63,10 @@ switch ($Category) {
             'stop-client' { net stop ergo_ms_client_dev 2>$null }
             'stop-media' { net stop ergo_ms_media_api 2>$null }
             'stop-beat' { net stop ergo_ms_celery_beat 2>$null }
-            'stop-workers' { Get-Service -Name 'ergo_ms_celery_worker*' -ErrorAction SilentlyContinue | ForEach-Object { net stop $_.Name 2>$null } }
+            'stop-workers' {
+                Get-Service -Name 'ergo_ms_celery_worker*' -ErrorAction SilentlyContinue | ForEach-Object { net stop $_.Name 2>$null }
+                Invoke-CeleryRequeueUnacked -ProjectRoot $Root
+            }
             'restart-all' { Restart-AllServices -ProjectRoot $Root }
             'restart-api' { net stop ergo_ms_api_dev 2>$null; net start ergo_ms_api_dev 2>$null }
             'restart-client' { net stop ergo_ms_client_dev 2>$null; net start ergo_ms_client_dev 2>$null }

@@ -36,6 +36,8 @@ def write_decision(
     forecast: dict[str, Any],
     workers: list[WorkerPlan],
     yaml_workers: dict[str, Any],
+    allowed_queues: list[str] | None = None,
+    node_id: str | None = None,
 ) -> Path:
     path = decision_path(project_root)
     ensure_dir(path.parent)
@@ -69,6 +71,10 @@ def write_decision(
         'non_light_cap': min(non_light_caps) if non_light_caps else 0,
         'pause_queues': sorted(set(pause_queues)),
     }
+    if node_id:
+        payload['node_id'] = node_id
+    if allowed_queues is not None:
+        payload['allowed_queues'] = list(allowed_queues)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     return path
 
@@ -84,24 +90,7 @@ def load_decision(project_root: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def worker_override(
-    project_root: Path,
-    worker_name: str | None,
-    *,
-    mode: str | None = None,
-) -> WorkerOverride | None:
-    if mode is not None and mode != MODE_AUTO:
-        return None
-    data = load_decision(project_root)
-    if not data:
-        return None
-    plans = data.get('plans')
-    if not isinstance(plans, dict):
-        return None
-    key = worker_name or 'all'
-    raw = plans.get(key)
-    if not isinstance(raw, dict) and worker_name is None and len(plans) == 1:
-        raw = next(iter(plans.values()), None)
+def _override_from_raw(raw: Any) -> WorkerOverride | None:
     if not isinstance(raw, dict):
         return None
     try:
@@ -126,3 +115,56 @@ def worker_override(
         autoscale_min=a_min,
         autoscale_max=a_max,
     )
+
+
+def _plans_override(plans: Any, worker_name: str | None) -> WorkerOverride | None:
+    if not isinstance(plans, dict):
+        return None
+    key = worker_name or 'all'
+    raw = plans.get(key)
+    if not isinstance(raw, dict) and worker_name is None and len(plans) == 1:
+        raw = next(iter(plans.values()), None)
+    return _override_from_raw(raw)
+
+
+def _agent_redis_override(project_root: Path) -> WorkerOverride | None:
+    """В контейнере агента нет своего decision.json. Размер пула лежит в Redis под ключом cluster."""
+    try:
+        from celery_balance.cluster import connect, load_plan
+        from celery_balance.constants import CLUSTER_ON, ROLE_AGENT
+        from celery_balance.settings import load_settings
+    except ImportError:
+        return None
+    settings = load_settings(project_root)
+    if settings.cluster != CLUSTER_ON or settings.cluster_role != ROLE_AGENT:
+        return None
+    client = connect(project_root)
+    if client is None:
+        return None
+    plan = load_plan(client, settings.node_id)
+    if not isinstance(plan, dict):
+        return None
+    plans = plan.get('plans')
+    if not isinstance(plans, dict):
+        return None
+    raw = plans.get('cluster')
+    if not isinstance(raw, dict) and len(plans) == 1:
+        raw = next(iter(plans.values()), None)
+    return _override_from_raw(raw)
+
+
+def worker_override(
+    project_root: Path,
+    worker_name: str | None,
+    *,
+    mode: str | None = None,
+) -> WorkerOverride | None:
+    if mode is not None and mode != MODE_AUTO:
+        return None
+    remote = _agent_redis_override(project_root)
+    if remote is not None:
+        return remote
+    data = load_decision(project_root)
+    if not data:
+        return None
+    return _plans_override(data.get('plans'), worker_name)

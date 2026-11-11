@@ -82,6 +82,28 @@ SERVICE_TEMPLATE = """
     restart: unless-stopped
 """
 
+NAMED_WORKER_TEMPLATE = """
+  {service}:
+    image: ${{DOCKER_PYTHON_IMAGE:-ergo_ms-python:local}}
+    env_file:
+      - .compose.env
+    environment:
+      ERGO_DOCKER_SERVICE_NAME: "{service}"
+      ERGO_DOCKER_REQUIRES_SETUP: "1"
+      ERGO_PROCESS_ROLE: module:{name}
+      PROCESS_MODULES: "{name}"
+{volumes}
+    depends_on:
+      redis:
+        condition: service_healthy
+      {name}:
+        condition: service_started
+    networks:
+      - ergo_net
+    command: ["python", "core/api/scripts/start_celery_worker.py", "--module={name}", "--worker={worker}"]
+    restart: unless-stopped
+"""
+
 BEAT_TEMPLATE = """
   {name}-beat:
     image: ${{DOCKER_PYTHON_IMAGE:-ergo_ms-python:local}}
@@ -141,12 +163,35 @@ def module_has_beat_schedule(name: str, project_root: Path | None = None) -> boo
     return any(api_dir.rglob('celery_beat_config.py'))
 
 
+def _service_token(value: str) -> str:
+    return ''.join(ch if ch.isalnum() or ch in ('_', '-') else '_' for ch in value)
+
+
+def load_module_workers(names: list[str], project_root: Path | None = None) -> dict[str, list[dict]]:
+    """Именованные воркеры модулей для отдельных сервисов compose."""
+    if not names:
+        return {}
+    root = project_root or PROJECT_ROOT
+    api_dir = root / 'core' / 'api'
+    if str(api_dir) not in sys.path:
+        sys.path.insert(0, str(api_dir))
+    from src.core.utils.celery.module_queues import read_module_workers
+
+    found: dict[str, list[dict]] = {}
+    for name in names:
+        specs = read_module_workers(root / 'modules' / name)
+        if specs:
+            found[name] = specs
+    return found
+
+
 def generate(
     modules: list[str],
     environ: dict[str, str] | None = None,
     *,
     depends_on_api: bool = True,
     beat_modules: frozenset[str] | None = None,
+    named_workers: dict[str, list[dict]] | None = None,
 ) -> str:
     header = """# Автогенерация: ergoms docker-gen-modules (не редактировать вручную)
 services:
@@ -171,6 +216,18 @@ services:
                 depends_on_api=api_block,
             )
         )
+        for spec in (named_workers or {}).get(name) or []:
+            worker_id = str(spec.get('name') or '').strip()
+            if not worker_id:
+                continue
+            blocks.append(
+                NAMED_WORKER_TEMPLATE.format(
+                    name=name,
+                    service=f'{name}-worker-{_service_token(worker_id)}',
+                    worker=worker_id,
+                    volumes=PYTHON_VOLUMES_YAML,
+                )
+            )
         if name in scheduled:
             blocks.append(
                 BEAT_TEMPLATE.format(
@@ -222,6 +279,7 @@ def main() -> int:
         modules,
         environ,
         depends_on_api=resolve_host_profile(environ).wants(SERVICE_API),
+        named_workers=load_module_workers(modules),
     )
     args.output.write_text(content, encoding='utf-8')
     if not args.quiet:

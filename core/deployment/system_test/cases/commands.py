@@ -29,7 +29,7 @@ class CommandsSmokeCase(SystemCase):
                 ('help', 180),
                 ('docker-migrate', 600),
                 ('security-check', 180),
-                ('status', 180),
+                ('docker-ps', 180),
             ]
         for command, timeout in commands:
             result = env.run_ergoms(command, timeout=timeout)
@@ -40,16 +40,18 @@ class CommandsSmokeCase(SystemCase):
                 failed.append(
                     f'{command}:{result.returncode}:{tail}' if tail else f'{command}:{result.returncode}'
                 )
-        log_name = ServiceNames(env.prefix).api_dev
-        log_result = env.run_ergoms('logs', log_name, '10', timeout=180)
-        ran.append('logs')
-        if log_result.returncode != 0 and env.kind == 'os-services':
-            failed.append(f'logs:{log_result.returncode}')
-        extras: list[str] = []
+        log_command = 'docker-logs' if env.kind == 'docker' else 'logs'
         if env.kind == 'docker':
-            extras.append('docker-ps')
+            log_result = env.run_ergoms(log_command, 'api', timeout=180)
+        else:
+            log_name = ServiceNames(env.prefix).api_dev
+            log_result = env.run_ergoms(log_command, log_name, '10', timeout=180)
+        ran.append(log_command)
+        if log_result.returncode != 0 and env.kind in ('docker', 'os-services'):
+            failed.append(f'{log_command}:{log_result.returncode}')
+        extras: list[str] = []
         if env.kind == 'os-services':
-            extras.extend(('status-all-services', 'test-redis', 'test-nginx'))
+            extras.extend(('test-redis', 'test-nginx'))
         for command in extras:
             result = env.run_ergoms(command, timeout=180)
             ran.append(command)

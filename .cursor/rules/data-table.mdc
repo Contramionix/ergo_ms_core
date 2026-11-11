@@ -1,0 +1,12 @@
+---
+description: UI ядра — DataTable, раскрывающаяся подстрока и пагинация через enable-pagination
+alwaysApply: false
+---
+
+# Таблица — DataTable
+
+Компонент: `@/components/DataTable.vue`.
+
+Постраничная навигация — проп `:enable-pagination="true"`, внутри тот же `Pagination`. Подробности — [`pagination.mdc`](pagination.mdc).
+
+Раскрывающаяся подстрока: проп `is-row-expanded` и слот `#row-details`. Строка плавно открывает `DataTableRowDetails`. Группы строк этот слот не поддерживает.

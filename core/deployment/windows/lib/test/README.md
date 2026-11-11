@@ -4,21 +4,14 @@
 
 ```cmd
 ergoms system-test --suite unit
-ergoms test_system
-ergoms deployment-test
 ```
 
-`ergoms test_system` — то же, что unit-тесты deployment. Флаг `--with-scenario` добавляет изолированный spec (по умолчанию `host_sqlite_direct`) через `deployment-scenario-test` и тоже **не** регистрирует NSSM или systemd.
+`ergoms system-test --suite scenarios --spec host_sqlite_direct` добавляет изолированный spec и тоже не регистрирует NSSM или systemd.
 
 Живые службы ОС (NSSM / systemd) — только изолированный сьют с отдельным префиксом, без очистки рабочего `virtual_env`:
 
 ```cmd
 ergoms system-test --suite os-services
-```
-
-```cmd
-ergoms test_system --with-scenario
-ergoms test_system --with-scenario --spec host_sqlite_direct
 ```
 
 Альтернатива без ergoms:

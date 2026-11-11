@@ -5,33 +5,8 @@ alwaysApply: true
 
 # Архитектура ERGO MS
 
-Сервер — Django (`core/api/`), клиент — Vue (`core/client/`). Ядро: `api/`, `client/`, `media_api/` (git-submodule) и `deployment/`. Модули — `modules/<имя>/` (submodule, `api/` и/или `client/`). Community-тексты — `core/.github`. После clone: `git submodule update --init --recursive`.
+Сервер — Django (`core/api/`), клиент — Vue (`core/client/`). Ядро: `api/`, `client/`, `media_api/` и `deployment/`. Модули — `modules/<имя>/` (submodule). Community-тексты — `core/.github`. После clone: `git submodule update --init --recursive`.
 
-Связь модуль↔модуль и ядро↔домен модуля — только **ModuleBridge** и hook-файлы с фиксированным именем, не прямой import. Каталог hook’ов — [`modules.mdc`](modules.mdc). Вынос процесса — [`modularization.mdc`](modularization.mdc) (по умолчанию монолит). Режимы в корневом `.env`, детали во `env/` — [`env-examples.mdc`](env-examples.mdc).
+Связь модуль↔модуль и ядро↔домен модуля — только ModuleBridge и hook-файлы с фиксированным именем. Каталог — [`modules.mdc`](modules.mdc). Вынос процесса — [`modularization.mdc`](modularization.mdc). Режимы — корневой `.env`, детали — [`env-examples.mdc`](env-examples.mdc).
 
-## Запрещено в ядре
-
-- `from modules.<имя>.api...` models / views / serializers / services / tasks в бизнес-логике
-- Hardcoded имена модулей в `core/` и `.cursor/rules/` (даже в комментариях) — `ergoms core-rules-check`
-- Static import страниц или store модуля в клиенте ядра (кроме `ModuleLoader` / glob загрузки)
-- Обход моста ради доступа к домену модуля
-
-```python
-# GOOD — ядро читает hook-файл
-mod = importlib.import_module(f'{app_path}.permission_catalog')
-
-# BAD
-from modules.<name>.api.models import SomeEntity
-```
-
-## Связанные правила
-
-| Тема | Файл |
-|------|------|
-| Изоляция | [`core-module-isolation.mdc`](core-module-isolation.mdc) |
-| Модули, hook’и, мост | [`modules.mdc`](modules.mdc) |
-| Вынос в сервис | [`modularization.mdc`](modularization.mdc) |
-| `.env` / `env/` | [`env-examples.mdc`](env-examples.mdc) |
-| Куда коммитить | [`git-commits.mdc`](git-commits.mdc) |
-| ergoms | [`no-direct-manage-py.mdc`](no-direct-manage-py.mdc) |
-| Безопасность | [`security.mdc`](security.mdc) |
+В ядре запрещены `from modules.<имя>.api...`, имена установленных модулей даже в комментариях, static import страниц модуля и обход моста. Проверка — `ergoms core-rules-check`. Изоляция подробнее — [`core-module-isolation.mdc`](core-module-isolation.mdc).

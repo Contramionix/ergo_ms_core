@@ -5,31 +5,10 @@ alwaysApply: true
 
 # Общие правила кода
 
-- Тесты модулей и точечные правки — только по просьбе пользователя. Правки развёртывания, `commands.conf`, служб ОС, docker/nginx, security стека и клиентского e2e — пиши и гоняй `ergoms system-test` по [`system-test.mdc`](system-test.mdc)
-- Файл — не больше **700** строк; длиннее — режь **по домену** (`def` / `class` / ответственность), не по номеру строки
-- SOLID, меньше дублирования; импорты вверху; внутри модуля — относительные, из ядра — `src.core...`
-- Тяжёлые задачи — **Celery**; в модуле — `config.py` CPU/GPU (по умолчанию GPU). Часовой расчёт не в shell Cursor: `--async`, чекпоинт, `--resume` — [`long-running-jobs.mdc`](long-running-jobs.mdc)
-- В командах и логах — без эмодзи
-- После задачи — убери лишний код и неиспользуемые импорты
-
-**Split:** сначала роль каждого файла; общие константы в один модуль; именованные импорты, не `from .x import *`. Не обрывай `def` / `class` посередине. Проверка: `ergoms core-rules-check` (mid-indent / `ast.parse`).
-
-## Сериализаторы и Swagger
-
-- Не бери `request.user` в полях сериализатора без проверки на None — `SwaggerSafeSerializerMixin.get_safe_user()`
-- Новый ViewSet — `BaseModelViewSet`; фильтр выборки в `get_queryset` или `owner_field`
-
-## Комментарии
-
-Только «почему», не «что». Docstring — для публичного API и сложной логики.
-
-## Связанные правила
-
-| Тема | Файл |
-|------|------|
-| API, Swagger | [`api_code.mdc`](api_code.mdc) |
-| Безопасность | [`security.mdc`](security.mdc) |
-| Celery | [`celery.mdc`](celery.mdc) |
-| Тесты | [`testing.mdc`](testing.mdc) |
-| Системные тесты | [`system-test.mdc`](system-test.mdc) |
-| Долгий расчёт | [`long-running-jobs.mdc`](long-running-jobs.mdc) |
+- Тесты и точечные правки — только по просьбе. Правки развёртывания, `commands.conf`, служб, docker/nginx и security стека сопровождай `ergoms system-test` — [`system-test.mdc`](system-test.mdc).
+- Файл не длиннее 700 строк. Режь по ответственности, не по номеру строки. Общие константы — в один модуль. Импорты именованные и вверху файла. Не обрывай `def` или `class` посередине.
+- Повторяющийся сценарий выноси в общий класс. Тяжёлую работу отдавай Celery. Часовой расчёт не запускай в shell Cursor — [`long-running-jobs.mdc`](long-running-jobs.mdc).
+- Данные приложения пиши внутри корня репозитория, не в `/tmp` и `/etc` — [`project-root-artifacts.mdc`](project-root-artifacts.mdc).
+- В командах и логах без эмодзи. После задачи убери мёртвый код и неиспользуемые импорты.
+- `request.user` в сериализаторе бери через `SwaggerSafeSerializerMixin.get_safe_user()`. Новый ViewSet — `BaseModelViewSet`, фильтр выборки в `get_queryset` или `owner_field`.
+- Комментарий объясняет «почему». Подробности API — [`api_code.mdc`](api_code.mdc).

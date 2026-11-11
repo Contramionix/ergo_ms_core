@@ -7,7 +7,9 @@ Host и Docker используют одни и те же фрагменты ups
 
 from __future__ import annotations
 
+import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, Mapping
 from urllib.parse import urlparse
@@ -16,7 +18,8 @@ _DEPLOYMENT_DIR = Path(__file__).resolve().parent.parent
 if str(_DEPLOYMENT_DIR) not in sys.path:
     sys.path.insert(0, str(_DEPLOYMENT_DIR))
 
-from ergo_modes import env_bool
+from api_processes import upstream_servers
+from ergo_modes import effective_docker_profile_jupyter, env_bool
 from security.csp_policy import (
     build_security_headers_nginx,
     read_federation_importmap_hashes,
@@ -73,22 +76,68 @@ def _parse_upstream_host_port(raw: str, default_port: str) -> str:
 
 def render_upstream_block(
     name: str,
-    server: str,
+    server: str | Sequence[str],
     *,
     keepalive: int | None = None,
     no_keepalive_comment: bool = False,
 ) -> str:
+    servers = [server] if isinstance(server, str) else list(server)
     lines = [f'upstream {name} {{']
     if no_keepalive_comment:
         lines.extend([
             '    # No upstream keepalive: on Windows, nginx->Daphne idle keepalive',
             '    # pools cause intermittent /api hangs (infinite SPA boot loader).',
         ])
-    lines.append(f'    server {server};')
+    for item in servers:
+        lines.append(f'    server {item};')
     if keepalive is not None:
         lines.append(f'    keepalive {keepalive};')
     lines.append('}')
     return '\n'.join(lines)
+
+
+def _split_host_port(target: str) -> tuple[str, int]:
+    host, sep, port = target.rpartition(':')
+    if not sep:
+        return target, 8000
+    try:
+        return host, int(port)
+    except ValueError:
+        return target, 8000
+
+
+def host_upstream_keepalive() -> int | None:
+    """На Windows keepalive к Daphne вешает /api. На Linux пул нужен."""
+    if os.name == 'nt':
+        return None
+    return 32
+
+
+def proxy_params_snippet_name() -> str:
+    if os.name == 'nt':
+        return 'proxy_params.conf'
+    return 'proxy_params_keepalive.conf'
+
+
+def resolve_media_storage_alias(values: Mapping[str, str]) -> str:
+    """Каталог файлов для internal alias. Совпадает с MEDIA_STORAGE_PATH."""
+    raw = _env(values, 'MEDIA_STORAGE_PATH').replace('\\', '/')
+    if not raw:
+        return '${ERGO_ROOT}/media'
+    if raw.startswith('/') or (len(raw) > 2 and raw[1] == ':'):
+        return raw.rstrip('/')
+    cleaned = raw.lstrip('./').rstrip('/')
+    return '${ERGO_ROOT}/' + cleaned
+
+
+def build_media_accel_location(alias: str) -> str:
+    root = alias.rstrip('/')
+    return f"""    # После проверки HMAC media_api отдаёт X-Accel-Redirect, файл читает nginx.
+    location /_ergo_media/ {{
+        internal;
+        alias {root}/;
+    }}
+"""
 
 
 def resolve_host_media_upstream(values: Mapping[str, str]) -> str:
@@ -304,12 +353,22 @@ def render_spa_locations_host(values: Mapping[str, str]) -> str:
 def build_host_upstream_blocks(values: Mapping[str, str]) -> tuple[str, str]:
     from module_nginx import media_route_modules
 
+    api_target = resolve_host_api_upstream(values)
+    api_host, api_port = _split_host_port(api_target)
+    api_servers = upstream_servers(api_host, values, base_port=api_port)
+    keepalive = host_upstream_keepalive()
     api = render_upstream_block(
         'ergo_api',
-        resolve_host_api_upstream(values),
-        no_keepalive_comment=True,
+        api_servers,
+        keepalive=keepalive,
+        no_keepalive_comment=keepalive is None,
     )
-    media = render_upstream_block('ergo_media', resolve_host_media_upstream(values))
+    media_target = resolve_host_media_upstream(values)
+    media = render_upstream_block(
+        'ergo_media',
+        media_target,
+        keepalive=8 if keepalive is not None else None,
+    )
     peer = resolve_host_media_modules_upstream(values)
     if peer and media_route_modules(values):
         media = media + '\n\n' + render_upstream_block(
@@ -322,9 +381,18 @@ def build_host_upstream_blocks(values: Mapping[str, str]) -> tuple[str, str]:
 def build_docker_upstream_blocks(values: Mapping[str, str]) -> tuple[str, str]:
     api_svc = _env(values, 'DOCKER_SERVICE_API', 'api')
     media_svc = _env(values, 'DOCKER_SERVICE_MEDIA', 'media-api')
-    api_port = _env(values, 'API_PORT', '8000')
+    try:
+        api_port = int(_env(values, 'API_PORT', '8000') or '8000')
+    except ValueError:
+        api_port = 8000
     media_port = _env(values, 'MEDIA_API_BIND_PORT', '8003')
-    api = render_upstream_block('ergo_api', f'{api_svc}:{api_port}', keepalive=32)
+    api_servers = upstream_servers(
+        api_svc,
+        values,
+        base_port=api_port,
+        always_expand=True,
+    )
+    api = render_upstream_block('ergo_api', api_servers, keepalive=32)
     media = render_upstream_block('ergo_media', f'{media_svc}:{media_port}', keepalive=8)
     return api, media
 
@@ -443,7 +511,7 @@ def build_host_api_ws_locations() -> str:
         proxy_pass http://ergo_api;
     }
 
-    # --- WebSocket: мессенджер, уведомления (/ws/messenger/, /ws/notifications/) ---
+    # --- WebSocket: чаты и уведомления (/ws/notifications/) ---
     location /ws/ {
         if ($maintenance = 1) { return 503; }
         limit_conn ergo_conn 20;
@@ -457,8 +525,9 @@ def build_host_api_ws_locations() -> str:
 """
 
 
-def build_host_media_locations() -> str:
-    return """    location /serve/ {
+def build_host_media_locations(values: Mapping[str, str] | None = None) -> str:
+    accel = build_media_accel_location(resolve_media_storage_alias(values or {}))
+    return accel + """    location /serve/ {
         if ($maintenance = 1) { return 503; }
         limit_req zone=ergo_serve burst=40 nodelay;
         limit_req_status 429;
@@ -466,6 +535,7 @@ def build_host_media_locations() -> str:
         limit_conn_status 429;
         proxy_buffering off;
         gzip off;
+        proxy_set_header X-Ergo-Accel 1;
         proxy_pass http://ergo_media;
     }
 
@@ -524,6 +594,11 @@ def build_docker_core_proxy_locations() -> str:
         proxy_send_timeout 86400s;
     }}
 
+    location /_ergo_media/ {{
+        internal;
+        alias /var/lib/ergo/media/;
+    }}
+
     location /serve/ {{
         limit_req zone=ergo_serve burst=40 nodelay;
         limit_req_status 429;
@@ -531,6 +606,7 @@ def build_docker_core_proxy_locations() -> str:
         limit_conn_status 429;
         proxy_buffering off;
         gzip off;
+        proxy_set_header X-Ergo-Accel 1;
         proxy_pass http://ergo_media;
     }}
 
@@ -586,11 +662,12 @@ def build_host_nginx_shared_replacements(values: Mapping[str, str]) -> dict[str,
         '${ERGO_REALTIME_STREAM_LOCATION}': build_realtime_stream_location(variant='host'),
         '${ERGO_HOST_API_WS_PROXY}': build_host_api_ws_locations(),
         '${ERGO_HOST_MEDIA_PROXY}': (
-            render_module_media_locations_host(values) + build_host_media_locations()
+            render_module_media_locations_host(values) + build_host_media_locations(values)
         ),
         '${ERGO_CLIENT_MAX_BODY_SIZE}': body_size,
         '${ERGO_RATE_LIMIT_CONF}': build_rate_limit_conf(values).rstrip('\n'),
         '${ERGO_UPLOAD_LIMIT_LINES}': upload_location_limit_lines(burst=int(rates['burst'])),
+        '${ERGO_PROXY_PARAMS_FILE}': proxy_params_snippet_name(),
     }
 
 
@@ -600,11 +677,12 @@ def _snippet_text(name: str) -> str:
 
 
 def build_docker_http_preamble(values: Mapping[str, str] | None = None) -> str:
-    """http-контекст внутри conf.d: hardening, gzip, зоны частоты (как host HTTP)."""
+    """http-контекст внутри conf.d: hardening, gzip, тип .mjs, зоны частоты (как host HTTP)."""
     rate_conf = build_rate_limit_conf(values or {})
     return (
         _snippet_text('http_hardening.conf')
         + _snippet_text('compression.conf')
+        + _snippet_text('mime_modules.conf')
         + rate_conf
     )
 
@@ -625,13 +703,31 @@ def build_docker_nginx_shared_replacements(
     body_size = resolve_client_max_body_size(values)
     csp_mode = resolve_csp_mode(values)
     rates = resolve_upload_rates(values)
+    tls = use_https(values)
+    listen_port = _env(values, 'NGINX_LISTEN_PORT', '80')
     return {
+        '${ERGO_DOCKER_JUPYTER_LOCATION}': (
+            'location /jupyter/ {\n'
+            f'        proxy_pass http://jupyter:{_env(values, "API_JUPYTER_BIND_PORT", "8002")}/jupyter/;\n'
+            '        proxy_set_header Host $host;\n'
+            '        proxy_set_header X-Real-IP $remote_addr;\n'
+            '        proxy_http_version 1.1;\n'
+            '        proxy_set_header Upgrade $http_upgrade;\n'
+            '        proxy_set_header Connection "upgrade";\n'
+            '    }'
+        ) if effective_docker_profile_jupyter(values) else 'location /jupyter/ { return 404; }',
+        '${ERGO_DOCKER_LISTEN}': f'listen {listen_port}{" ssl" if tls else ""};',
+        '${ERGO_DOCKER_TLS}': (
+            'ssl_certificate /etc/ergo/tls/cert.pem;\n'
+            '    ssl_certificate_key /etc/ergo/tls/key.pem;\n'
+            '    ssl_protocols TLSv1.2 TLSv1.3;'
+        ) if tls else '',
         '${ERGO_DOCKER_HTTP_PREAMBLE}': build_docker_http_preamble(values),
         '${ERGO_DOCKER_SECURITY_HEADERS}': build_security_headers_nginx(
             csp_mode,
             extra_script_hashes=read_federation_importmap_hashes(project_root),
         ),
-        '${ERGO_DOCKER_PROXY_PARAMS}': _snippet_text('proxy_params.conf'),
+        '${ERGO_DOCKER_PROXY_PARAMS}': _snippet_text('proxy_params_keepalive.conf'),
         '${ERGO_API_UPSTREAM_BLOCK}': api_upstream,
         '${ERGO_MEDIA_UPSTREAM_BLOCK}': media_upstream,
         '${ERGO_CORE_PROXY_LOCATIONS}': build_core_proxy_locations(variant='docker'),

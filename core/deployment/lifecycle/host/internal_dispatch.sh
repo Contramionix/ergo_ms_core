@@ -87,6 +87,7 @@ case "$category" in
         for u in $(units_list "$root"); do
           [[ "$u" == ergo_ms_celery_worker* ]] && systemctl_do stop "$u"
         done
+        _requeue_unacked "$root"
         ;;
       restart-all) restart_all ;;
       restart-api) systemctl_do restart ergo_ms_api_dev.service ;;

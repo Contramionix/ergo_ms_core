@@ -11,6 +11,7 @@ CLI portable-пакетов.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -28,6 +29,8 @@ from packages.installer import (  # noqa: E402
     uninstall_package,
 )
 from packages.registry import PackageRegistryError, get_package  # noqa: E402
+from runtime_requirements import RuntimeRequirementsError  # noqa: E402
+from runtime_requirements.plan import install_required_tools, resolve_plan  # noqa: E402
 
 
 def _resolve_root(raw: Path | None) -> Path:
@@ -96,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest='command', required=True)
 
     sub.add_parser('list', help='Список пакетов реестра')
+    requirements = sub.add_parser('requirements', help='Проверить runtime_requirements.yaml')
+    requirements.add_argument('--json', action='store_true')
+    required = sub.add_parser('install-required', help='Установить обязательные инструменты модулей')
+    required.add_argument('--include-optional', action='store_true')
 
     p_status = sub.add_parser('status', help='Статус пакета или всех')
     p_status.add_argument('name', nargs='?', default=None, help='Имя пакета')
@@ -125,6 +132,23 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = _resolve_root(args.root)
 
+    if args.command in ('requirements', 'install-required'):
+        try:
+            if args.command == 'install-required':
+                return install_required_tools(root, include_optional=args.include_optional)
+            plan = resolve_plan(root)
+            if args.json:
+                print(json.dumps(plan, ensure_ascii=False))
+            else:
+                for entry in plan['tools']:
+                    policy = 'required' if entry['required'] else 'optional'
+                    print(f"{entry['name']}: {policy} ({', '.join(entry['modules'])})")
+                print('Python groups: ' + ', '.join(plan['python_groups']))
+                print(format_console('ok', 'runtime_requirements.yaml проверены'))
+            return 0
+        except (RuntimeRequirementsError, PackageRegistryError) as exc:
+            print(format_console('error', str(exc)), file=sys.stderr)
+            return 1
     if args.command == 'list':
         return cmd_list(root)
     if args.command == 'status':

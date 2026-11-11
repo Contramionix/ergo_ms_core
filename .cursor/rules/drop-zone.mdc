@@ -1,0 +1,35 @@
+---
+description: UI ядра — Зона файлов — DropZone
+alwaysApply: false
+---
+
+## Зона файлов — DropZone
+
+Компонент: `@/components/DropZone.vue`.
+
+Только зона выбора файлов (клик и перетаскивание). Список вложений, статусы загрузки и `mediaApiClient` остаются у родителя. Не копируй локальный dropzone в модуле.
+
+```vue
+<script setup>
+import DropZone from '@/components/DropZone.vue'
+</script>
+
+<template>
+  <DropZone
+    :compact="files.length > 0"
+    @files="onFiles"
+  />
+</template>
+```
+
+`@files` отдаёт `File[]`. Тексты по умолчанию — `components.dropZone.*`; при необходимости переопредели `title`, `hint`, `browse`, `ariaLabel`.
+
+| Prop | Когда |
+|------|-------|
+| `multiple` | по умолчанию `true`; `false` — один файл |
+| `compact` | меньшая высота, когда снизу уже есть список |
+| `disabled` | блокировка клика и drop |
+| `accept` | как у нативного `input` (`.pdf`, `image/*`) |
+| `title` / `hint` / `browse` | свои подписи вместо i18n ядра |
+| `ariaLabel` | a11y для input; иначе `components.dropZone.ariaLabel` |
+| `#icon` | своя иконка вместо `UploadCloud` |

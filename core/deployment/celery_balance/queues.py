@@ -101,6 +101,10 @@ def _redis_section(project_root: Path) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         return {}
     section = data.get('redis')
+    if not isinstance(section, dict):
+        databases = data.get('databases')
+        if isinstance(databases, dict):
+            section = databases.get('redis')
     return dict(section) if isinstance(section, dict) else {}
 
 
@@ -115,12 +119,19 @@ def _redis_connect_kwargs(project_root: Path, environ: dict[str, str]) -> dict[s
                 db = int(parts.path.strip('/').split('/')[0])
             except ValueError:
                 db = REDIS_CELERY_BROKER_DB_DEFAULT
+        password = parts.password
+        if not password:
+            password = str(section.get('password') or '').strip() or None
+        host = parts.hostname or '127.0.0.1'
+        override = (os.environ.get('REDIS_HOST') or '').strip()
+        if override and host in {'127.0.0.1', 'localhost'} and override not in {'127.0.0.1', 'localhost'}:
+            host = override
         return {
-            'host': parts.hostname or '127.0.0.1',
+            'host': host,
             'port': parts.port or 6379,
             'db': db,
             'username': parts.username,
-            'password': parts.password,
+            'password': password,
             'socket_timeout': 1.5,
             'socket_connect_timeout': 1.5,
         }

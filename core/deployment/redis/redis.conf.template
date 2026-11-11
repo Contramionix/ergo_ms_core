@@ -1,6 +1,7 @@
 # ERGO MS — локальный Redis (virtual_env/packages/redis)
 # Сгенерировано install_redis.py; не редактируйте пути вручную без переустановки.
 
+# Дополнительный адрес — REDIS_BIND_EXTRA, только вместе с паролем Redis.
 bind {{REDIS_BIND}}
 port {{REDIS_PORT}}
 protected-mode yes
@@ -18,4 +19,7 @@ save 300 10
 save 60 10000
 
 appendonly no
-maxmemory-policy noeviction
+# Потолок задаёт установка: доля доступной памяти или REDIS_MAXMEMORY.
+# volatile-lru вытесняет только ключи с TTL. Очереди брокера без TTL остаются.
+maxmemory {{REDIS_MAXMEMORY}}
+maxmemory-policy volatile-lru

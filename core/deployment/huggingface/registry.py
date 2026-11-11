@@ -7,10 +7,9 @@ Discovery modules/*/huggingface_models.yaml.
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 _HF_DIR = Path(__file__).resolve().parent
 _DEPLOYMENT_DIR = _HF_DIR.parent
@@ -20,6 +19,7 @@ if str(_DEPLOYMENT_DIR) not in sys.path:
 from console_tags import format_console  # noqa: E402
 from env_file_loader import load_project_env, parse_env_file  # noqa: E402
 from lifecycle.modules.catalog import ModuleCatalog  # noqa: E402
+from runtime_requirements import RuntimeRequirementsError, model_entries  # noqa: E402
 
 from .models import ResolvedHfModel  # noqa: E402
 
@@ -56,7 +56,7 @@ def _resolve_repo_id(entry: dict[str, Any], *, env_values: dict[str, str]) -> st
     env_key = str(entry.get('env') or '').strip()
     if not env_key:
         return ''
-    value = (env_values.get(env_key) or '').strip()
+    value = (os.environ.get(env_key, env_values.get(env_key)) or '').strip()
     if value:
         return value
     return str(entry.get('default') or '').strip()
@@ -69,29 +69,8 @@ def _parse_hook(
     module_dir_name: str,
     env_values: dict[str, str],
 ) -> list[ResolvedHfModel]:
-    try:
-        text = path.read_text(encoding='utf-8')
-    except OSError as exc:
-        _warn(f'{path}: не удалось прочитать ({exc})')
-        return []
-    if not text.strip():
-        return []
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        _warn(f'{path}: ошибка YAML ({exc})')
-        return []
-    if not isinstance(data, dict):
-        _warn(f'{path}: корень должен быть объектом')
-        return []
-
-    module = str(data.get('module') or module_dir_name).strip() or module_dir_name
-    raw_models = data.get('models')
-    if raw_models is None:
-        return []
-    if not isinstance(raw_models, list):
-        _warn(f'{path}: models должен быть списком')
-        return []
+    module = module_dir_name
+    raw_models = model_entries(path.parent, 'huggingface')
 
     resolved: list[ResolvedHfModel] = []
     try:
@@ -105,6 +84,8 @@ def _parse_hook(
             continue
         repo_id = _resolve_repo_id(item, env_values=env_values)
         if not repo_id:
+            if item.get('required', True):
+                raise RuntimeRequirementsError(f'{path}: обязательная модель {item.get("env", index)} не задана')
             _warn(f'{path}: models[{index}] — пустой repo (нужны repo/name или env+default)')
             continue
         required_raw = item.get('required', True)
@@ -144,8 +125,10 @@ def load_resolved_models(root: Path) -> tuple[ResolvedHfModel, ...]:
     collected: list[ResolvedHfModel] = []
     for module_dir in catalog.iter_module_dirs():
         path = module_dir / HOOK_FILENAME
-        if not path.is_file():
+        if not path.is_file() and not (module_dir / 'runtime_requirements.yaml').is_file():
             continue
+        if (module_dir / 'runtime_requirements.yaml').is_file():
+            path = module_dir / 'runtime_requirements.yaml'
         collected.extend(
             _parse_hook(
                 path,

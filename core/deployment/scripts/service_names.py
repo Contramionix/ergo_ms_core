@@ -146,13 +146,27 @@ class ServiceNames:
     def module(self, module: str, kind: str) -> str:
         return f'{self.prefix}_module_{_safe_module_token(module)}_{kind}'
 
+    def module_worker(self, module: str, worker_id: str) -> str:
+        """Служба одного именованного воркера: ``…_worker_<id>``."""
+        token = _safe_module_token(worker_id)
+        return f'{self.module(module, "worker")}_{token}'
+
     def parse_module_unit(self, name: str) -> tuple[str, str] | None:
-        """Разбор ``{prefix}_module_{token}_{kind}`` → (module, api|worker|beat)."""
+        """Разбор ``{prefix}_module_{token}_{kind}`` → (module, api|worker|beat).
+
+        ``…_worker_<id>`` узнаётся раньше голого ``_worker``, иначе id
+        съедается как хвост имени модуля.
+        """
         base = name.replace('.service', '')
         token = f'{self.prefix}_module_'
         if not base.startswith(token):
             return None
         rest = base[len(token):]
+        mark = '_worker_'
+        if mark in rest:
+            module, worker_id = rest.split(mark, 1)
+            if module and worker_id:
+                return module, 'worker'
         for kind in ('worker', 'beat', 'api'):
             suffix = f'_{kind}'
             if rest.endswith(suffix):

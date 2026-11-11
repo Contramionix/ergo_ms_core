@@ -1,7 +1,9 @@
 ---
-description: Django-миграции ERGO MS — индексы, нумерация, локальное сжатие schema, makemigrations, ergoms
+description: Django-миграции ERGO MS — читаемые имена индексов, нумерация, локальное сжатие schema, makemigrations, ergoms
 globs:
   - "**/migrations/*.py"
+  - "**/models.py"
+  - "**/models/**/*.py"
 alwaysApply: false
 ---
 
@@ -11,8 +13,8 @@ alwaysApply: false
 
 ## Кратко
 
-- Индексы в модели и в миграции — **одни и те же явные** `name=`.
-- Запрещены placeholder-имена индексов (`a1b2c3`, `d4e5f6`, `foo`, `bar`).
+- Индекс в модели и в миграции — одно и то же явное `name=`: слова о полях, не хеш Django.
+- Имя индекса — до 30 символов, латиница, `snake_case`. Без `name=` следующий прогон предложит `RenameIndex` на новый хеш.
 - Один номер миграции — один файл; не создавай второй `0025_*`, если уже есть `0025_*`.
 - После правок: `ergoms api makemigrations --dry-run` **дважды подряд** → оба раза `No changes detected`.
 - На **локальном** этапе не раздувай цепочку: соседние schema-файлы сжимай в один до push (см. ниже).
@@ -22,16 +24,19 @@ alwaysApply: false
 
 ### Индексы в `Meta.indexes`
 
-Если в модели есть `models.Index(...)`, задай **`name=`** — тот же строковый литерал, что в `AddIndex` / `CreateModel`.
+Если в модели есть `models.Index(...)`, задай **`name=`** до `makemigrations`. Тот же строковый литерал — в `AddIndex`, `CreateModel` или `RenameIndex`.
 
-Порядок действий при **новом** индексе:
+Имя читается как слова: латиница, `snake_case`, смысл полей. Потолок Django — 30 символов (`Index.max_name_length`). Суффикс `_idx` и префикс приложения не обязательны. Примеры: `message_room_created`, `theme_module_active`.
 
-1. Добавь `Index(fields=[...])` в модель **без** `name`.
-2. `ergoms api makemigrations <app>`.
-3. Скопируй сгенерированное имя из миграции в модель как `name='...'`.
-4. Снова `ergoms api makemigrations <app> --dry-run` — изменений быть не должно.
+Порядок для нового индекса:
 
-Эталон: [`Theme`](../../core/api/src/core/settings/models.py) и [`0023_theme_module_key.py`](../../core/api/src/core/settings/migrations/0023_theme_module_key.py).
+1. В модели сразу `Index(..., name='message_room_created')`.
+2. `ergoms api makemigrations <app>` — в файл попадает это имя.
+3. `ergoms api makemigrations <app> --dry-run` — `No changes detected`.
+
+Хеш уже в локальном файле, миграция ещё не применена и не уехала с машины: замени имя в модели и в этом файле на одно читаемое. Отдельную миграцию не добавляй.
+
+Хеш уже в применённой или уехавшей миграции: старый файл не переписывай. Читаемое имя — в модели и в следующем `RenameIndex`.
 
 ### Нумерация и цепочка
 
@@ -90,11 +95,17 @@ ergoms api makemigrations --dry-run
 ## Запрещено
 
 ```python
-# BAD — выдуманное имя индекса
-models.Index(fields=['module_key', 'is_active'], name='settings_th_module__a1b2c3_idx')
+# BAD — автоимя Django: обрезка таблицы и хеш
+models.Index(
+    fields=['content_type', 'object_id', 'created_at'],
+    name='app_m_content_7d3c1a_idx',
+)
 
-# BAD — индекс в модели без name, а в миграции — с name (или наоборот)
+# BAD — без name следующий makemigrations предложит RenameIndex на новый хеш
 indexes = [models.Index(fields=['status', 'created_at'])]
+
+# BAD — выдуманный хеш вместо слов
+models.Index(fields=['module_key', 'is_active'], name='theme_mod_a1b2c3_idx')
 
 # BAD — второй файл с тем же номером
 # 0025_foo.py уже есть → не создавай 0025_bar.py, только 0026_bar.py
@@ -104,11 +115,11 @@ indexes = [models.Index(fields=['status', 'created_at'])]
 ```
 
 ```python
-# GOOD — одно имя в модели и в миграции
+# GOOD — одно читаемое имя в модели и в миграции
 indexes = [
     models.Index(
         fields=['module_key', 'is_active'],
-        name='settings_th_module__48e8e9_idx',
+        name='theme_module_active',
     ),
 ]
 ```
@@ -119,6 +130,7 @@ indexes = [
 
 1. В **модели** и в **исходной** schema-миграции (если ещё не в prod) — канонические имена.
 2. Отдельная миграция с **условным** переименованием в БД для старых установок.
+3. Хеш в имени — повод дать читаемое имя при правке этого индекса, не повод переименовывать старые индексы пачкой.
 
 Эталон: [`0026_align_theme_legacy_index_names.py`](../../core/api/src/core/settings/migrations/0026_align_theme_legacy_index_names.py) — проверка `pg_indexes`, переименование только если старое имя есть и нового ещё нет.
 

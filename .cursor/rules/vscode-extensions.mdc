@@ -1,0 +1,36 @@
+---
+description: Расширения VS Code / Cursor в .vscode/extensions — версия, VSIX и установка
+globs:
+  - ".vscode/extensions/**"
+  - ".vscode/lib/**"
+  - ".vscode/scripts/**"
+alwaysApply: false
+---
+
+# Расширения VS Code / Cursor
+
+## Кратко
+
+- Источник правды — `.vscode/extensions/<имя>/`
+- VSIX в `.vscode/local-extensions/` — собранная копия для быстрой установки
+- Установка — `ergoms install-extensions`, затем Reload Window
+- Новый код — новая `version` и `ergoms update-vsix`
+
+## Обязательно
+
+- Правка `extension.js`, `lib/`, `package.nls*.json` или `contributes` — поднять `version` в `package.json` того же расширения. Смена поведения — минорная версия, исправление — патч.
+- После правки пересобрать пакет: `ergoms update-vsix`. Она же удаляет старые VSIX того же расширения.
+- `install-extensions` ставит исходники, если они новее VSIX или при той же версии расходятся с ним по содержимому, и пишет `[WARNING] Устаревших VSIX`. Такое предупреждение — сигнал пересобрать VSIX, а не игнорировать.
+
+## Запрещено
+
+- Менять код расширения без новой версии. Cursor и установщик по версии считают расширение уже стоящим, и старый код продолжает работать.
+- Возвращать снятое поведение (например, `addPlugin` в `module-rules` — [`module-cursor-rules.mdc`](module-cursor-rules.mdc)) в установленной копии или в VSIX.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Правила модулей и `module-rules` | [`module-cursor-rules.mdc`](module-cursor-rules.mdc) |
+| Задачи VS Code | [`vscode-tasks.mdc`](vscode-tasks.mdc) |
+| Команда установки | [`npm-workspace.mdc`](npm-workspace.mdc) |

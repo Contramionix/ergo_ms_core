@@ -1,0 +1,102 @@
+---
+paths:
+  - "**/ws/**"
+  - "**/realtime/**"
+  - "**/consumers/**"
+  - "**/routing.py"
+  - "**/asgi.py"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Realtime (WebSocket, SSE, polling)
+
+Уведомления in_app, presence, мессенджер и часть админ-лент используют **realtime-транспорт**. Режим задаётся в `.env`.
+
+## Кратко
+
+- `ERGO_REALTIME=websocket` (или `REALTIME_TRANSPORT`) — Django Channels (ASGI), клиент — `openAuthenticatedWebSocket`
+- `ERGO_REALTIME=sse` — push через **Server-Sent Events** (`GET /api/realtime/stream/`)
+- `ERGO_REALTIME=http_polling` — REST + периодический polling (`GET /api/realtime/sync/`)
+- Публикация событий — **`RealtimeHub.publish`** (`core/api/src/core/realtime/hub.py`), не прямой `group_send` из бизнес-кода
+- Клиент SSE — **`getRealtimeClient()`** из `@/js/realtime/RealtimeClient.js`, auth через `Authorization: Bearer` (не token в URL)
+- JWT на WebSocket — только в первом envelope `{ type: 'ws_auth', payload: { token } }`, ответ `{ type: 'ws_auth_ok', ... }`
+- В режиме `websocket` создание, правка текста и удаление сообщения мессенджера идут кадрами `send_message` / `edit_message` / `delete_message` в комнату; REST — для вложений, SSE и `http_polling`
+
+## Обязательно
+
+- Новый push в ядре — через `RealtimeHub` + envelope; WS consumer — тонкий адаптер
+- Новый WebSocket — наследник `JwtMessageAuthConsumer`, маршрут в `routing.py`, подключение в `asgi.py`
+- SSE: подписки на room через `POST /api/realtime/subscriptions/` (`subscribe` / `unsubscribe`, поле `topic`)
+- Модули: topic registry — `register_realtime_topic` в `AppConfig.ready()` (API: `core/api/src/core/realtime/registry.py`)
+- Channel layer prod: `CHANNEL_LAYER_BACKEND=postgres` или `redis` (не `memory` при нескольких worker)
+- При `ERGO_BROKER=redis` без явного `CHANNEL_LAYER_BACKEND` effective-backend — `redis` ([`redis_runtime.py`](../../core/api/src/config/redis_runtime.py))
+
+## Запрещено
+
+```js
+// BAD — токен в query (логи сервера, Referer)
+new WebSocket(`${wsUrl}/ws/notifications/?token=${accessToken}`)
+
+// BAD — свой polling без учёта REALTIME_TRANSPORT
+setInterval(() => fetch('/api/...'), 1000)
+```
+
+```python
+# BAD — прямой group_send из views/сервисов (минуй RealtimeHub)
+async_to_sync(channel_layer.group_send)(group, {...})
+
+# BAD — WebSocket без JWT auth на connect
+class MyConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+```
+
+## Переменные окружения
+
+Шаблон: [`env/realtime.env.example`](../../env/realtime.env.example).
+
+| Переменная | Назначение |
+|------------|------------|
+| `ERGO_REALTIME` | `websocket` \| `sse` \| `http_polling` — сервер и клиент (`REALTIME_TRANSPORT` перекрывает) |
+| `REALTIME_SSE_KEEPALIVE_INTERVAL` | keepalive SSE на сервере, сек |
+| `CHANNEL_LAYER_BACKEND` | `memory` \| `postgres` \| `redis` |
+| `CHANNEL_LAYER_REDIS_URL` | URL Redis (если backend=redis) |
+| `ERGO_BROKER=redis` | channel layer, кэш и Celery broker по умолчанию через Redis (секция `redis` в `databases.yaml`; см. [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc)) |
+| `REALTIME_POLL_*` | интервалы polling в режиме `http_polling`, сек |
+
+Клиент получает `REALTIME_*` из merge `.env` + `env/*.env` при сборке и с API (`GET /api/realtime/config/`) после входа.
+
+Развёртывание с Nginx: `/api/realtime/stream/` и regex `^/api/.+/stream/` — `proxy_buffering off`, `proxy_read_timeout 3600s` (модульные chat SSE без имён модулей в ядре) — см. `core/deployment/nginx/render_common.py`.
+
+## Topics (SSE subscribe)
+
+| Topic | Группа channel layer |
+|-------|----------------------|
+| `user:{id}` | `notifications_user_{id}` |
+| `chat:{app.model}:{object_id}` | `messenger_{app.model}_{object_id}` |
+| `presence:admin` | `presence_admin` |
+| `presence:peer:{public_id}` | `presence_peer_{public_id}` |
+| `bi:dashboard:{id}` | `bi_dashboard_{id}` (модуль) |
+
+## Клиент
+
+```js
+import { getRealtimeClient, messengerTopic } from '@/js/realtime/RealtimeClient.js'
+
+const client = getRealtimeClient()
+client.ensureConnected()
+client.on('notification_new', (_e, data) => { /* data.payload — уведомление */ })
+await client.subscribe(messengerTopic('tasks.task', 42))
+```
+
+Envelope: `{ v, id, topic, type, payload, ts }` — проверка через `isRealtimeEnvelope` (`@/js/realtime/envelope.js`), данные события в `payload`.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Уведомления | [`notifications.mdc`](../../.cursor/rules/notifications.mdc) |
+| JWT, токены | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| ASGI, Channels | [`django.mdc`](../../.cursor/rules/django.mdc) |
+| Redis, nginx | [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc) |
+| Конфигурация | [`.docs/configuration.md`](../../.docs/configuration.md) |

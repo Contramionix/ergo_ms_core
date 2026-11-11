@@ -20,6 +20,8 @@ bridge.call(
     route={'name': 'SomeRoute', 'params': {'itemRef': '<uuid>'}},
     meta={'item_name': '…'},
     idempotency_key='<name>:submit:<uuid>',
+    scope_ref='<uuid>',
+    scope_label='Человекочитаемое имя контекста',
 )
 
 # Когда доменное действие сделало уведомление неактуальным:
@@ -52,12 +54,21 @@ bridge.call(NOTIFICATIONS_RECALL, idempotency_keys=['…', '…'])
 
 - in_app — лента + realtime (`websocket` или `http_polling`, см. [`realtime.mdc`](realtime.mdc))
 - email — Celery после commit; пауза из env `NOTIFICATIONS_EMAIL_DELAY_SECONDS` (default `300` = 5 мин, `0` = сразу). К моменту задачи отозванное (`notifications.recall` / `deleted_at`) письмо не уходит (`SKIPPED`)
+- Окно по часам ядро не держит. Модуль, которому нельзя писать в колокольчик ночью, откладывает свой outbox и вызывает `notifications.create` уже внутри окна. Служебные письма учётки идут сразу
+- Канал с `forced: true` в каталоге события включён всегда: общий выключатель и личная галочка его не гасят. В панели настроек такой переключатель включён и недоступен (`locked`). Письмо всё равно не уйдёт без адреса получателя или при выключенной почте на сервере
+- Вложение письма модуль кладёт в контекст `attachments`: список `{filename, content, mimetype}`. Ядро крепит их к письму рядом с картинками шапки
 
-Пользователь включает каналы в настройках. Событие вне каталога — in_app может уйти, email нет.
+Пользователь включает каналы в настройках. Событие вне каталога — in_app может уйти, email нет. Канал `forced` этому правилу не подчиняется.
+
+Отписка от писем уведомлений — страница подтверждения ядра (`/api/notifications/email/unsubscribe/`), не лента. GET не пишет. POST, в том числе `List-Unsubscribe=One-Click`, выключает только email-канал предпочтений. Токен несёт `public_id` пользователя и канал, без pk. Заголовки отписки ставят только если собран публичный origin.
+
+## Контекст сессии
+
+Если событие принадлежит компании или другому session-scope модуля, в `notifications.create` передай `scope_ref` — непрозрачный `public_id`, не pk — и `scope_label` с человекочитаемым именем. Старые записи без подписи ядро добирает через `notifications.scope_labels`. В ленте и письме видны подпись контекста и тип события из каталога, а не только имя модуля. Лента общая: ядро не режет inbox по `scope_ref`. Клик и ссылка из письма вызывают клиентский `session.enter_scope` и входят в нужный контекст. Пустой `scope_ref` ничего не переключает. Письмо остаётся на человека, не на выбранную компанию. В URL письма ядро добавляет `query.scope_ref`.
 
 ## Маршрут в уведомлении
 
-В `route.params` — **не числовые id из БД**, а `public_id` / непрозрачные ссылки (см. [`security.mdc`](security.mdc), [`security-details.mdc`](security-details.mdc)).
+В `route.params` и `route.query` — **не числовые id из БД**, а `public_id` / непрозрачные ссылки (см. [`security.mdc`](security.mdc), [`security-details.mdc`](security-details.mdc)). Письмо и колокольчик должны открывать ту же карточку: query из маршрута попадает и в URL письма, и в `router.push`.
 
 ## Иконки на клиенте
 

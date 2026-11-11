@@ -2,3 +2,6 @@
 core/deployment/**/*.sh text eol=lf
 # Локальная Unix-обёртка ergoms
 core/deployment/bin/ergoms text eol=lf
+# cmd.exe некорректно разбирает UTF-8 комментарии в batch с LF.
+*.cmd text eol=crlf
+*.bat text eol=crlf

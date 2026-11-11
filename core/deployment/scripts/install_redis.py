@@ -47,6 +47,7 @@ REDIS_WINDOWS_URL = (
 
 DEFAULT_PORT = 6379
 DEFAULT_BIND = '127.0.0.1'
+_BIND_ADDR = re.compile(r'^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-fA-F:]+)$')
 
 
 def _parse_simple_yaml_section(text: str, section: str) -> dict[str, str]:
@@ -283,6 +284,51 @@ def _copy_windows_redis_binaries(source_root: Path, dest: Path) -> None:
         raise RuntimeError(f'Expected Redis binaries in Windows archive: {source_root}')
 
 
+def _extra_bind(root: Path, password: str | None) -> str:
+    from env_file_loader import load_project_env
+
+    raw = str(load_project_env(root).get('REDIS_BIND_EXTRA') or '').strip()
+    if not raw:
+        return ''
+    if not str(password or '').strip():
+        from cli_locale import t
+        from console_tags import format_console
+
+        print(format_console('warning', t('redis_bind_extra_needs_password')))
+        return ''
+    found: list[str] = []
+    for part in re.split(r'[\s,]+', raw):
+        if part and _BIND_ADDR.match(part) and part not in found:
+            found.append(part)
+    return ' '.join(found)
+
+
+def _mem_available_bytes() -> int:
+    if platform.system().lower() == 'windows':
+        return 0
+    try:
+        for line in Path('/proc/meminfo').read_text(encoding='utf-8').splitlines():
+            if line.startswith('MemAvailable:'):
+                return int(line.split()[1]) * 1024
+    except (OSError, IndexError, ValueError):
+        return 0
+    return 0
+
+
+def resolve_redis_maxmemory(root: Path) -> str:
+    """Явный REDIS_MAXMEMORY или доля доступной памяти. В git размер не пишется."""
+    from env_file_loader import load_project_env
+
+    explicit = str(load_project_env(root).get('REDIS_MAXMEMORY') or '').strip()
+    if explicit:
+        return explicit
+    available = _mem_available_bytes()
+    if available <= 0:
+        return '256mb'
+    target = max(64 * 1024 * 1024, available // 8)
+    return str(target)
+
+
 def render_redis_conf(
     root: Path,
     port: int = DEFAULT_PORT,
@@ -314,7 +360,8 @@ def render_redis_conf(
         daemonize = 'yes'
 
     content = (
-        template.replace('{{REDIS_BIND}}', bind)
+        template.replace('{{REDIS_MAXMEMORY}}', resolve_redis_maxmemory(root))
+        .replace('{{REDIS_BIND}}', ' '.join(part for part in (bind, _extra_bind(root, effective_password)) if part))
         .replace('{{REDIS_PORT}}', str(port))
         .replace('{{REDIS_REQUIREPASS_LINE}}', requirepass_line)
         .replace('{{REDIS_ACL_USER_LINE}}', acl_user_line)

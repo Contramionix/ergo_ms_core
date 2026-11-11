@@ -1,0 +1,23 @@
+---
+description: UI ядра — Трёхпозиционный тумблер — TriStateSwitch
+alwaysApply: false
+---
+
+## Трёхпозиционный тумблер — TriStateSwitch
+
+Компонент: `@/components/TriStateSwitch.vue`.
+
+Тот же iOS-track, что у `ToggleSwitch`, но бегунок стоит слева / по центру / справа. Не копируй track/thumb в модулях.
+
+Значения `modelValue`: `deny` (запрещено), `inherit` (не задано), `allow` (разрешено). Клик по трети дорожки ставит соответствующее значение; стрелки листают позиции.
+
+```vue
+<TriStateSwitch v-model="effect" aria-label="Персональное право" />
+```
+
+| Prop | Когда |
+|------|-------|
+| `modelValue` | `deny` / `inherit` / `allow` |
+| `label` | подпись справа от track |
+| `disabled` | блокировка |
+| `ariaLabel` | a11y; иначе берётся `label` или текущее значение |

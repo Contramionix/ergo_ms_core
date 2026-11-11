@@ -1,0 +1,115 @@
+---
+paths:
+  - "core/deployment/lifecycle/**"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Lifecycle-pipeline развёртывания
+
+Составные сценарии установки, развёртывания и эксплуатации ERGO MS проходят через **одну** цепочку шагов. Пользовательская документация — [`.docs/lifecycle-pipeline.md`](../../.docs/lifecycle-pipeline.md). Устройство deployment — [`logic.md`](../../core/deployment/logic.md).
+
+## Кратко
+
+- Точки входа: `ergoms`, `commands.conf`, `ergo_ms.ps1` / `ergo_ms.sh`, `.vscode/tasks.json`, `docker_cli.py`
+- Единый вход: [`lifecycle/runner.py`](../../core/deployment/lifecycle/runner.py) → `DeploymentOrchestrator.run_recipe()` → `DeploymentPipeline` → `DeploymentStep`
+- Реестр: [`lifecycle/recipes.py`](../../core/deployment/lifecycle/recipes.py); список: `ergoms` через runner или `py -3.12 core/deployment/lifecycle/runner.py --list`
+- **Составные** команды — только рецепт runner; **примитивы** (`api:migrate`, `npm:run build`) — в `commands.conf` для разработки
+- Linux `sudo` для infra — внутри [`privilege.py`](../../core/deployment/lifecycle/host/privilege.py), не в `tasks.json`
+- Владелец `logs/`, `core/client/dist` и remotes — владелец корня проекта. Не пиши `chown user:user`: вызови `restore_project_ownership` / `restore_client_build_ownership`. Имя пользователя не хардкодится.
+
+## Цепочка
+
+```
+ergoms / tasks.json / ergo_ms.ps1|sh / commands.conf / docker_cli.py
+    → lifecycle/runner.py <recipe>
+    → DeploymentOrchestrator.run_recipe()
+    → DeploymentPipeline
+    → шаги (common / host / service / infra / compose / dev)
+    → host/ops | docker/ops | shell_bridge → internal_dispatch → services.ps1|sh, nginx, redis
+```
+
+## Слои
+
+| Каталог / файл | Назначение |
+|----------------|------------|
+| [`runner.py`](../../core/deployment/lifecycle/runner.py) | argparse, `--list`, `--recreate-venv`, `--purge`, `--worker`, `--docker-mode`; `setup-full` до venv — системный Python |
+| [`orchestrator.py`](../../core/deployment/lifecycle/orchestrator.py) | `run_recipe()` |
+| [`context.py`](../../core/deployment/lifecycle/context.py) | `runtime` (host/docker), `target`, `options` |
+| [`recipes.py`](../../core/deployment/lifecycle/recipes.py) | `RecipeSpec`: шаги, `needs_sudo`, алиасы ergoms |
+| [`steps/common_steps.py`](../../core/deployment/lifecycle/steps/common_steps.py) | Python/npm/migrate/warmup/build/static — ветвление host/docker; host npm skip по отпечатку манифестов и наличию пакетов в `node_modules`, не по mtime |
+| [`steps/host_steps.py`](../../core/deployment/lifecycle/steps/host_steps.py) | venv, Poetry, submodule, scaffold, CLI |
+| [`steps/service_steps.py`](../../core/deployment/lifecycle/steps/service_steps.py) | `service-*` → `internal_dispatch` category `service` |
+| [`steps/infra_steps.py`](../../core/deployment/lifecycle/steps/infra_steps.py) | `nginx-*`, `redis-*`, `tls-*`; cleanup `setup-full` — `StopSetupStartedInfraStep` (`run_as_cleanup`, nginx/redis + `host_lifecycle` stop_commands) |
+| [`pipeline.py`](../../core/deployment/lifecycle/pipeline.py) | основные шаги; шаги с `run_as_cleanup` — в `finally` (и при ошибке) |
+| [`steps/compose_steps.py`](../../core/deployment/lifecycle/steps/compose_steps.py) | `docker-up` (bootstrap при отсутствии маркера), down/build/ps/logs |
+| [`steps/dev_steps.py`](../../core/deployment/lifecycle/steps/dev_steps.py) | `dev-api`, `start-client`, `start-worker`, `warmup-caches-if-needed` |
+| [`host/ops.py`](../../core/deployment/lifecycle/host/ops.py) | venv, `run_api_command`, npm, foreground-скрипты |
+| [`host/shell_bridge.py`](../../core/deployment/lifecycle/host/shell_bridge.py) | вызов `internal_dispatch.ps1` / `.sh` |
+| [`services/catalog.py`](../../core/deployment/lifecycle/services/catalog.py) | реестр служб, workers из `celery_workers.yaml` |
+
+## Группы рецептов
+
+| Группа (`target`) | Примеры | Аналог ergoms |
+|-------------------|---------|---------------|
+| `deployment` | `setup-full`, `install-deps`, `deploy-*`, `build-all` | `ergoms setup`, `install-deps`, `deploy-api` |
+| `service` | `service-install-all` / `service-uninstall-all` (+ `ModuleHostServicesStep` из `host_lifecycle.yaml`), `service-start-api`, … | `install-services`, `uninstall-services`, `start`, `*-api-service` |
+| `infra` | `nginx-install`, `redis-start`, `tls-renew` | `install-nginx`, `start-redis`, `renew-tls` |
+| `compose` | `docker-init`, `docker-up`, `docker-migrate` | `ergoms docker-*` |
+| `foreground` | `dev-api`, `start-worker`, `warmup-caches-if-needed` | `ergoms dev`, `start-worker` |
+
+Алиасы (`install-services` → `service-install-all`, `dev` → `dev-api`) — в `recipes.py`, не дублируй цепочки в `commands.conf`.
+
+## Обязательно при добавлении сценария
+
+1. Шаг в `lifecycle/steps/` (или обёртка над существующим скриптом deployment).
+2. `RecipeSpec` в `recipes.py`; при необходимости алиас для имени ergoms.
+3. Строка в `commands.conf`: `win:... runner.py <recipe> && linux:...` (или builtin в `ergo_ms.ps1` / `ergo_ms.sh` → `Invoke-LifecycleRunner` / `invoke_lifecycle_runner`).
+4. `summary` в `help.manifest.yaml`.
+5. Host **и** Docker — чеклист в [`docker.mdc`](../../.cursor/rules/docker.mdc), если меняется запуск процесса.
+6. `.vscode/tasks.json` — **только** `ergoms <команда>`, без прямого `ergo_ms.ps1`, `sudo bash ergo_ms.sh`, `docker_cli.py`.
+
+## Запрещено
+
+```text
+# BAD — составная цепочка в commands.conf
+install-deps=api:install && npm:run install:all && api:migrate
+
+# BAD — tasks.json обходит ergoms
+"command": "powershell -File core/deployment/windows/ergo_ms.ps1 setup-full"
+"command": "sudo bash core/deployment/linux/ergo_ms.sh install-nginx"
+
+# BAD — docker_cli дублирует compose inline без run_recipe
+subprocess.call(build_compose_cmd('up', ...))
+```
+
+```text
+# GOOD — один рецепт
+install-deps=win:virtual_env\python\Scripts\python.exe core\deployment\lifecycle\runner.py install-deps && linux:...
+
+# GOOD — tasks.json
+"command": "ergoms setup && ergoms install-extensions"
+```
+
+## internal_dispatch (фаза 1 служб и infra)
+
+[`internal_dispatch.ps1`](../../core/deployment/lifecycle/host/internal_dispatch.ps1) / [`.sh`](../../core/deployment/lifecycle/host/internal_dispatch.sh) — тонкий dispatch к `services.ps1`, `nginx.ps1`, `redis.ps1`, `tls.sh`. Логику NSSM/systemd **не** копируй в Python — strangler: adapter сейчас, перенос в `services/backends/` позже.
+
+Windows `.ps1` с кириллицей — **UTF-8 BOM** — см. [`ps1-encoding.mdc`](../../.cursor/rules/ps1-encoding.mdc).
+
+## DISABLED_MODULES
+
+- Deploy/setup — `commands install` + `ModuleCatalog` (как раньше).
+- Service catalog — не ставить/не стартовать службы отключённых модулей.
+- Docker workers — `GenerateWorkersComposeStep` / catalog пропускает disabled.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Bootstrap Python / без PyYAML в импортах setup | [`lifecycle-python-runtime.mdc`](../../.cursor/rules/lifecycle-python-runtime.mdc) |
+| Submodule `core/.github` в setup/update | [`github-org-community.mdc`](../../.cursor/rules/github-org-community.mdc) |
+| commands.conf, help | [`ergoms-commands.mdc`](../../.cursor/rules/ergoms-commands.mdc) |
+| Docker compose | [`docker.mdc`](../../.cursor/rules/docker.mdc) |
+| nginx, redis, TLS | [`deployment-infra.mdc`](../../.cursor/rules/deployment-infra.mdc) |
+| UTF-8 BOM в .ps1 | [`ps1-encoding.mdc`](../../.cursor/rules/ps1-encoding.mdc) |
+| Консольные метки | [`console-output.mdc`](../../.cursor/rules/console-output.mdc) |

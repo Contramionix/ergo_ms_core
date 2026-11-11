@@ -111,13 +111,33 @@ def resolve_docker_node_base(raw: dict[str, str] | None = None) -> str:
     explicit = _env(raw or {}, 'DOCKER_NODE_BASE', '')
     if explicit:
         return explicit
-    preferred = 'node:20-bookworm-slim'
+    preferred = 'node:24-bookworm-slim'
     if _docker_image_exists(preferred):
         return preferred
     fallback = _env(raw or {}, 'DOCKER_NODE_IMAGE', 'ergo_ms-client:local') or 'ergo_ms-client:local'
-    if _docker_image_exists(fallback):
+    if _docker_image_exists(fallback) and _docker_node_image_compatible(fallback):
         return fallback
     return preferred
+
+
+def _docker_node_image_compatible(image_ref: str) -> bool:
+    """Старый client-образ не должен возвращать Node 20 после обновления базы."""
+    try:
+        result = subprocess.run(
+            ['docker', 'image', 'inspect', '--format', '{{range .Config.Env}}{{println .}}{{end}}', image_ref],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode == 0:
+        for line in result.stdout.splitlines():
+            if line.startswith('NODE_VERSION='):
+                try:
+                    major, minor, *_ = (int(part) for part in line.partition('=')[2].split('.'))
+                except ValueError:
+                    return False
+                return major == 24 and minor >= 11
+    return False
 
 
 def load_databases_config(project_root: Path | None = None) -> dict[str, Any]:
@@ -864,6 +884,10 @@ def resolve_volume_binds(project_root: Path, raw_env: dict[str, str]) -> dict[st
     binds: dict[str, str] = {
         'ERGO_PROJECT_ROOT': str(project_root.resolve()).replace('\\', '/'),
         'ERGO_CELERY_CACHE_BIND': resolve_celery_cache_bind(project_root, raw_env),
+        'ERGO_CLIENT_DIST_BIND': (
+            'client_dist' if docker_mode(raw_env) == 'prod'
+            else str((project_root / 'core/client/dist').resolve()).replace('\\', '/')
+        ),
     }
     if logs_mode == 'bind':
         logs_dir = (project_root / 'logs').resolve()
@@ -898,6 +922,23 @@ def prepare_compose_artifacts(
     publish_path = home / 'docker-compose.publish.generated.yml'
     redis_auth_path = home / 'docker-compose.redis-auth.generated.yml'
     build_cache_path = home / 'docker-compose.build.generated.yml'
+    tls_path = home / 'docker-compose.nginx-tls.generated.yml'
+    if (env_bool(raw.get('DOCKER_PROFILE_NGINX')) or effective_nginx_enabled(raw)) and (
+        env_bool(raw.get('NGINX_USE_HTTPS')) or raw.get('NGINX_LISTEN_PORT') == '443'
+    ):
+        mounts = []
+        for key, target in (('ERGO_SSL_CERT', 'cert.pem'), ('ERGO_SSL_KEY', 'key.pem')):
+            source = Path(raw.get(key) or '')
+            if not source.is_absolute():
+                source = root / source
+            if not raw.get(key) or not source.is_file():
+                raise ValueError(f'Для HTTPS требуется существующий файл {key}.')
+            mounts.append(f'{source.resolve().as_posix()}:/etc/ergo/tls/{target}:ro')
+        tls_path.write_text(_yaml().safe_dump({
+            'services': {'nginx': {'volumes': mounts}},
+        }, sort_keys=False), encoding='utf-8')
+    else:
+        tls_path.unlink(missing_ok=True)
 
     published = resolve_infra_publish_ports(raw, warn=True)
     write_publish_compose(publish_path, published)
@@ -929,7 +970,7 @@ def prepare_compose_artifacts(
 
     node_base = resolve_docker_node_base(merged)
     merged['DOCKER_NODE_BASE'] = node_base
-    if warn_image_bases and node_base != 'node:20-bookworm-slim':
+    if warn_image_bases and not raw.get('DOCKER_NODE_BASE') and node_base != 'node:24-bookworm-slim':
         warn_key = f'node-base:{node_base}'
         if warn_key not in _PUBLISH_WARNED:
             _PUBLISH_WARNED.add(warn_key)
@@ -942,7 +983,7 @@ def prepare_compose_artifacts(
 
     python_base = resolve_docker_python_base(merged)
     merged['DOCKER_PYTHON_BASE'] = python_base
-    if warn_image_bases and python_base not in ('python:3.12-slim-bookworm', 'python:3.12-slim'):
+    if warn_image_bases and not raw.get('DOCKER_PYTHON_BASE') and python_base not in ('python:3.12-slim-bookworm', 'python:3.12-slim'):
         warn_key = f'python-base:{python_base}'
         if warn_key not in _PUBLISH_WARNED:
             _PUBLISH_WARNED.add(warn_key)

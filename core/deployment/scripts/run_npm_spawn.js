@@ -7,13 +7,11 @@ import { spawnSync } from 'node:child_process'
 
 function quoteCmdArg(arg) {
   const s = String(arg)
-  // ^ — escape-символ cmd.exe; удваиваем, чтобы дочерний процесс получил один ^.
-  // Иначе pkg@^1.2.3 после кавычек превращается в битое имя пакета.
-  const withCarets = s.replace(/\^/g, '^^')
-  if (!/[ \t"&<>|()]/.test(s)) {
-    return withCarets
+  // В кавычках cmd.exe сохраняет ^; без них npm.cmd теряет диапазон semver.
+  if (!/[ \t"&<>|()^]/.test(s)) {
+    return s
   }
-  return `"${withCarets.replace(/"/g, '""')}"`
+  return `"${s.replace(/"/g, '""')}"`
 }
 
 export function runNpm(args, options = {}) {
@@ -29,6 +27,7 @@ export function runNpm(args, options = {}) {
     return spawnSync('cmd.exe', ['/d', '/s', '/c', line], {
       ...base,
       windowsHide: true,
+      windowsVerbatimArguments: true,
     })
   }
 

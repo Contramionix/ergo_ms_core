@@ -67,7 +67,7 @@ class HostOpsPathTests(unittest.TestCase):
                 wrappers_dir(root),
                 backups_dir(root),
                 portable_python_exe(root),
-                huggingface_snapshot_dir(root, '../escape/name'),
+                huggingface_snapshot_dir(root, 'team/name'),
             )
             root_resolved = str(root.resolve())
             for path in paths:
@@ -75,9 +75,8 @@ class HostOpsPathTests(unittest.TestCase):
                     str(path.resolve()).startswith(root_resolved),
                     msg=f'{path} left project root',
                 )
-            snapshot = huggingface_snapshot_dir(root, '../escape/name')
-            self.assertEqual(snapshot.name, 'name')
-            self.assertNotIn('..', snapshot.parts)
+            with self.assertRaises(ValueError):
+                huggingface_snapshot_dir(root, '../escape/name')
 
     def test_tool_cache_environ_uses_virtual_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

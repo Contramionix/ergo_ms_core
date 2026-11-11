@@ -1,0 +1,42 @@
+---
+description: UI ядра — Формы — FormCard / FormField
+alwaysApply: false
+---
+
+## Формы — FormCard / FormField
+
+Компоненты: `@/components/FormCard.vue`, `@/components/FormField.vue`.
+
+Горизонтальные строки «подпись слева / поле справа» (как в настройках профиля). Не копируй `profile-card__*` в модулях.
+
+```vue
+<script setup>
+import FormCard from '@/components/FormCard.vue'
+import FormField from '@/components/FormField.vue'
+</script>
+
+<template>
+  <FormCard>
+    <FormField label="Название" label-for="title" required>
+      <input id="title" v-model="title" type="text" class="form-control form-control-sm" />
+    </FormField>
+    <FormField label="Описание" label-for="desc" last>
+      <textarea id="desc" v-model="desc" class="form-control form-control-sm" rows="3" />
+    </FormField>
+    <template #footer>
+      <button type="button" class="btn btn-primary btn-sm">Сохранить</button>
+    </template>
+  </FormCard>
+</template>
+```
+
+| Prop `FormField` | Когда |
+|------|-------|
+| `label` / `labelFor` | подпись и `for` |
+| `required` | красная звёздочка у обязательного поля |
+| `hint` / `#hint` | подсказка под полем |
+| `error` | текст ошибки |
+| `last` | без нижней границы (последняя строка) |
+| `align="center"` | чекбоксы и короткие контролы |
+
+Эталон: [`UserProfileFields.vue`](../../core/client/src/core/cms/adp/user/account/component/settings-panels/UserProfileFields.vue).

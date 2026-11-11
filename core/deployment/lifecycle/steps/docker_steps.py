@@ -199,11 +199,24 @@ class DockerUpAppServicesStep(DeploymentStep):
         if host.wants(SERVICE_API):
             services.append('api')
         if host.wants(SERVICE_CLIENT) or ctx.resolved_docker_mode() == 'dev':
-            services.append('client')
+            services.append(docker_ops.npm_client_service(ctx.resolved_docker_mode()))
         if host.wants(SERVICE_MEDIA):
             services.append('media-api')
         if host.wants(SERVICE_BEAT):
             services.append('celery-beat')
+        if docker_ops.env_bool_key(ctx.raw_env, 'DOCKER_PROFILE_NGINX') or docker_ops.effective_nginx_enabled(ctx.raw_env):
+            services.append('nginx')
+        # Эти фрагменты уже отфильтрованы генераторами по host profile.
+        import yaml
+
+        home = docker_ops.compose_docker_dir(ctx.project_root)
+        for filename in ('docker-compose.workers.generated.yml', 'docker-compose.modules.generated.yml'):
+            path = home / filename
+            if path.is_file():
+                generated = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+                for name in generated.get('services', {}):
+                    if name not in services:
+                        services.append(name)
         for name in ctx.extra_services:
             if name not in services:
                 services.append(name)

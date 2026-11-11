@@ -1,0 +1,104 @@
+---
+paths:
+  - "package.json"
+  - "virtual_env/npm/**"
+  - "core/client/package.json"
+  - "core/client/vite.config.js"
+  - "modules/*/client/package.json"
+  - "core/deployment/**/*npm*"
+  - "core/deployment/scripts/start_client_if_*.py"
+  - "core/deployment/project_layout.py"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# npm workspace в `virtual_env/npm`
+
+Клиентские зависимости npm живут **не** в корне репозитория, а в каталоге **`virtual_env/npm/`**. Portable Node.js — отдельно в `virtual_env/packages/nodejs/`; кэш npm — в `virtual_env/cache/npm/`.
+
+Пути в коде: [`npm_root_dir`](../../core/deployment/project_layout.py), [`npm_node_modules_dir`](../../core/deployment/project_layout.py).
+
+## Кратко
+
+| Что | Где |
+|-----|-----|
+| Манифест workspace, lock, `.npmrc` | `virtual_env/npm/` |
+| Установленные пакеты | `virtual_env/npm/node_modules/` |
+| Workspaces | только `../../core/client` (модули — не workspace, их пакеты ставит sync-скрипт) |
+| Команды клиента | `ergoms npm …` (cwd = `virtual_env/npm`) |
+| Тонкий корневой `package.json` | только скрипты VS Code расширений |
+
+## Обязательно
+
+- Ставить и обновлять зависимости через **`ergoms npm run install:all`** (или `ergoms npm …`), не через «голый» `npm` в корне репозитория как cwd workspace.
+- Новые клиентские deps **ядра** (оболочка, CMS, сборка) — в [`virtual_env/npm/package.json`](../../virtual_env/npm/package.json); после изменений ядра — `ergoms npm-lock-refresh`, проверка — `ergoms lock-check`.
+- Доменные клиентские пакеты **модуля** (графики, редакторы, карты, предпросмотр файлов) — в `modules/<имя>/client/package.json`. Их ставит [`sync-module-npm-deps.js`](../../core/deployment/scripts/sync-module-npm-deps.js) в тот же `node_modules` **без** записи в lock. После правок модуля — `ergoms npm run install:all`, не `npm-lock-refresh`.
+- Запуск скриптов клиента из npm-root через workspace: `npm run build -w @ergo-ms/core-client` (как в `package.json` npm-root и compose).
+- Vite: пакеты резолвятся из `virtual_env/npm/node_modules` (плагин + `resolve.modules` / `server.fs.allow` в [`vite.config.js`](../../core/client/vite.config.js)) — каталог **не** предок `core/client`, walk-up Node их не найдёт.
+- Docker: том `node_modules` монтируется в **`/app/virtual_env/npm/node_modules`**; установка — [`ensure_npm_deps.sh`](../../core/deployment/docker/entrypoint/ensure_npm_deps.sh).
+- Пути к npm-root и `node_modules` — через `project_layout`, не строковые литералы «наугад» в новых скриптах.
+
+## Запрещено
+
+```text
+# BAD — снова делать корневой node_modules основным workspace
+npm install          # cwd = корень репозитория как npm-root
+ln -s virtual_env/npm/node_modules node_modules   # перенос через symlink/junction
+
+# BAD — хардкод старых путей
+/app/node_modules
+Join-Path $Root "node_modules"   # как единственный целевой путь установки
+```
+
+```text
+# GOOD
+ergoms npm run install:all
+cwd / путь: virtual_env/npm
+Docker volume → /app/virtual_env/npm/node_modules
+```
+
+- **Не** возвращать клиентский `package.json` / lock / workspaces в корень репозитория.
+- **Не** предлагать symlink/junction корневого `node_modules` → `virtual_env/npm/...` как способ «убрать с корня».
+- **Не** ставить клиентские deps в тонкий корневой `package.json` (там только расширения VS Code).
+- **Не** класть в `virtual_env/npm/package.json` пакеты, которые импортирует только модуль (Apex/ECharts, CodeMirror, pdfjs, карты и т.п.) — только `modules/<имя>/client/package.json`. Календарь ядра (`DatePicker` / `@vuepic/vue-datepicker` / `date-fns`) и холст графа (`GraphAtlas` / `d3`) — зависимость ядра, не модуля.
+- **Не** восстанавливать том `client_node_modules` и ручные `ln -sf` в `core/client/node_modules/.bin` без крайней необходимости — запуск через `-w` из npm-root.
+
+Допустимо: штатные ссылки **внутри** `virtual_env/npm/node_modules` на workspace-пакеты (`@ergo-ms/core-client` → `core/client`) — это обычное поведение npm workspaces, не «перенос корня через symlink».
+
+## Корневой `package.json` и расширения
+
+Корневой [`package.json`](../../package.json) — **не** npm workspace клиента, в нём живут только скрипты расширений VS Code.
+
+Расширения ставятся командой **`ergoms install-extensions`** (и `ergoms uninstall-extensions`). Внутри `commands.conf` она развёрнута в прямой вызов `node .vscode/scripts/install-extensions.js`, потому что эти скрипты не относятся к npm workspace в `virtual_env/npm`.
+
+Из-за этого **не** предлагай `ergoms npm run install-extensions`: префикс `npm:` выполняет команды в `virtual_env/npm`, где скрипта расширений нет. В задачах VS Code и в документации пиши `ergoms install-extensions`.
+
+Описания и `contributes` расширений — мультиязычные (`ru` / `en` / `fr`) через `package.nls*.json`: см. [`i18n.mdc`](../../.cursor/rules/i18n.mdc) → «Расширения VS Code / Cursor».
+
+Префикс `npm:` в ergoms всегда выполняет команды в **`virtual_env/npm`**.
+
+## Vite и запуск клиента
+
+[`start_client_if_dev.py`](../../core/deployment/scripts/start_client_if_dev.py) / `start_client_if_enabled.py` и [`client_build.py`](../../core/deployment/scripts/client_build.py) запускают Vite через `npm run … -w @ergo-ms/core-client` с `cwd=virtual_env/npm`. В `PATH` обязательно должен быть `virtual_env/npm/node_modules/.bin`: workspace лежит не в предке `core/client`, поэтому npm сам не находит `vite`.
+
+При правках [`vite.config.js`](../../core/client/vite.config.js) сохраняй резолв из `virtual_env/npm/node_modules` и доступ `server.fs.allow` к npm-root.
+
+## Lock и модули
+
+- `package-lock.json` — только ядро. Workspace в манифесте — `../../core/client`; модули в lock попадать не должны.
+- Доустановка модульных пакетов — [`sync-module-npm-deps.js`](../../core/deployment/scripts/sync-module-npm-deps.js) в `virtual_env/npm/node_modules`. Лишнее снимает свой обход дерева ядра и модулей, не `npm prune`: иначе `--no-save` пакеты считались бы лишними. Повторный `setup-full` / `install:all` **не** смотрит на mtime `package.json`: skip — по отпечатку содержимого манифестов **и** по наличию прямых пакетов в `node_modules` (git checkout с тем же текстом не запускает установку заново; пропавший пакет модуля — запускает). Обход `node_modules` для очистки — только если сменился набор прямых пакетов, сменился lock ядра или передан `--update`. Полный `npm install` ядра — только если `node_modules` пуст или нет ссылок workspace. Сменившийся lock при пакетах на месте только обновляет отпечаток. Недостающие пакеты ядра и модулей ставятся в staging и копируются в `node_modules`, чтобы npm не пересобирал всё дерево и не упирался в peer-зависимости уже стоящего Vue (`vue@undefined` / ERESOLVE). Если установка падает с ENOENT в `_cacache` (битый индекс после прерывания или `cache clean`), скрипт делает `cache verify`, при повторной ошибке — `cache clean --force`, и ставит пакеты ещё раз. Скрипт и цепочка `module-env.js` / `parse-disabled-modules.js` **не** требуют пакеты из `node_modules` при загрузке (`dotenv` и т.п.): на чистой машине `install:all` как раз их ставит.
+- Команды: `ergoms npm-lock-refresh`, `npm-lock-sanitize`, `lock-check`. Подробнее для людей — [`.docs/cli.md`](../../.docs/cli.md).
+
+## Очистка и legacy
+
+`ergoms clean` удаляет `virtual_env/npm/node_modules` и при наличии устаревший корневой `node_modules`. После смены пути в Docker очистите старые named volumes `*_node_modules`.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Кратко про Node в virtual_env | [`virtual-env.mdc`](../../.cursor/rules/virtual-env.mdc) |
+| Пути артефактов | [`project-root-artifacts.mdc`](../../.cursor/rules/project-root-artifacts.mdc), [`project-root-artifacts-details.mdc`](../../.cursor/rules/project-root-artifacts-details.mdc) |
+| Префикс `npm:` | [`ergoms-commands.mdc`](../../.cursor/rules/ergoms-commands.mdc) |
+| Docker volumes / ensure | [`docker.mdc`](../../.cursor/rules/docker.mdc) |
+| `.gitignore` | [`gitignore.mdc`](../../.cursor/rules/gitignore.mdc) |
+| Только через ergoms | [`no-direct-manage-py.mdc`](../../.cursor/rules/no-direct-manage-py.mdc) |

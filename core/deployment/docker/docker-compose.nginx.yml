@@ -9,8 +9,9 @@ services:
       - "${NGINX_LISTEN_PORT:-80}:${NGINX_LISTEN_PORT:-80}"
     volumes:
       - ./nginx/ergo_ms.conf.rendered:/etc/nginx/conf.d/default.conf:ro
-      - ${ERGO_PROJECT_ROOT:-../../..}/core/client/dist:/usr/share/nginx/html:ro
+      - ${ERGO_CLIENT_DIST_BIND:-${ERGO_PROJECT_ROOT:-../../..}/core/client/dist}:/usr/share/nginx/html:ro
       - ${ERGO_PROJECT_ROOT:-../../..}/virtual_env/static_api:/usr/share/nginx/static:ro
+      - ${ERGO_MEDIA_BIND:-../../../media}:/var/lib/ergo/media:ro
       - ${ERGO_LOGS_BIND:-../../../logs}:/var/log/ergo:rw
     depends_on:
       api:
@@ -24,10 +25,7 @@ services:
     restart: unless-stopped
 
   api:
-    ports: []
+    ports: !reset []
 
   media-api:
-    ports: []
-
-  client:
-    ports: []
+    ports: !reset []

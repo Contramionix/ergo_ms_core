@@ -22,7 +22,7 @@ alwaysApply: false
 |-----------|------|------------|
 | Агент (кратко) | `AGENTS.md` | куда смотреть, обязательно / запрещено, ключевые команды |
 | Агент (детали) | `.cursor/rules/*.mdc` | globs `modules/<name>/**`, чеклист, BAD/GOOD |
-| Как должен работать | `BEHAVIOR.md` | устойчивые нормы из чата; появляется при первом пожелании — [`module-behavior.mdc`](module-behavior.mdc) |
+| Как должен работать | `BEHAVIOR.md` | устойчивые нормы из чата; если файл стал оглавлением, текст темы лежит в `behavior/` — [`module-behavior.mdc`](module-behavior.mdc) |
 | Люди | `README.md` | назначение, зависимости, настройка `.env`, команды ergoms |
 | CLI | `ergoms.help.yaml` (+ `locales/<lang>/`) | справка `ergoms help module` |
 | Учебный эталон | `modules/module_template/` | HOWTO + living patterns |

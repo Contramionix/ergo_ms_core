@@ -1,0 +1,9 @@
+# Индексация. Чтение по прямому пути остаётся: это не .cursorignore.
+virtual_env/
+logs/
+media/
+notebooks/
+
+# Сырые корпуса модулей. Индекс, который модуль сам кладёт в data/index, в поиске остаётся.
+modules/*/data/**
+!modules/*/data/index/**

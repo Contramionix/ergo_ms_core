@@ -1,0 +1,124 @@
+---
+paths:
+  - "core/client/**/*.vue"
+  - "core/client/**/*.js"
+  - "modules/**/client/**/*.vue"
+  - "modules/**/client/**/*.js"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# SelectBox — единственный выпадающий список
+
+Для **любого** выбора значения из списка в клиенте (ядро и модули) используй **`SelectBox`** из ядра.
+
+Компонент: `@/components/SelectBox.vue`
+
+## Обязательно
+
+- Новые и правки существующих форм, фильтров, тулбаров, модалок — **только** `SelectBox`
+- Импорт: `import SelectBox from '@/components/SelectBox.vue'`
+- Иерархические списки — встроенные props (`depth-key`, `secondary-label-key`), не кастомные отступы и размеры шрифта в слоте
+
+## Запрещено
+
+```vue
+<!-- BAD — нативный select -->
+<select v-model="value" class="form-select">...</select>
+
+<!-- BAD — bootstrap select без SelectBox -->
+<b-form-select v-model="value" :options="options" />
+
+<!-- BAD — свой выпадающий список только ради выбора из списка -->
+<div class="dropdown" @click="toggle">...</div>
+
+<!-- BAD — сторонние select-компоненты (vue-select, multiselect и т.п.) -->
+<VueSelect v-model="value" :options="options" />
+```
+
+**Исключения:** нет для обычного выбора из списка. Не дублируй `SelectBox` в модуле своим компонентом-обёрткой без явной причины.
+
+## Базовый пример
+
+```vue
+<script setup>
+import SelectBox from '@/components/SelectBox.vue'
+
+const STATUS_OPTIONS = [
+  { id: 'all', name: 'Все' },
+  { id: 'online', name: 'В сети' },
+]
+</script>
+
+<template>
+  <SelectBox
+    v-model="status"
+    :options="STATUS_OPTIONS"
+    value-key="id"
+    label-key="name"
+    :include-all-option="false"
+  />
+</template>
+```
+
+По умолчанию `SelectBox` использует `--select-box-font-size: 1rem` (стандарт форм). На странице задайте свой размер через CSS-переменную на обёртке:
+
+```scss
+.my-toolbar :deep(.select-box) {
+  --select-box-font-size: 0.875rem;
+  --select-box-icon-size: 14px;
+}
+```
+
+## Частые props
+
+| Prop | Когда |
+|------|--------|
+| `value-key` / `label-key` | объекты `{ id, name }` (по умолчанию `id` / `name`) |
+| `include-all-option` | `false` — без пустого пункта; `true` + `all-label` — «не выбрано» / «все» |
+| `cast-to-number` | числовые id из API |
+| `searchable` | длинные списки; поле фильтра — `SearchInput` (`layout="fill"`) внутри меню |
+| `filter-local-options="false"` | удалённый поиск через `@search` — не резать `options` локально |
+| `@load-more` | удалённая догрузка: событие при прокрутке списка к низу (родитель сам решает, есть ли ещё страница) |
+| `multiple` | множественный выбор |
+| `show-checkboxes-when-multiple` | чекбоксы в multi-режиме |
+| `multiple-label-format="count"` | «N выбрано» вместо длинного списка |
+| `fixed-trigger-label-font-size` | не уменьшать подпись в триггере при нехватке ширины |
+| `uniform-dropdown-list-font` | одинаковый `font-weight` у пунктов списка (имя prop в коде) |
+| `depth-key` + `secondary-label-key` | иерархические списки (подразделения и т.п.) |
+| `option-indent-per-level` | доп. отступ вложенных пунктов, rem; по умолчанию **`0`** |
+| `nested-option-font-size` / `nested-secondary-font-size` | размер шрифта вложенных строк; пусто — как у списка |
+| `disabled` | недоступное поле |
+| `menu-mode` | `compact` (по умолчанию) — список не выше 260px; `screen` — список тянется до края окна |
+
+## Иерархические опции
+
+```vue
+<SelectBox
+  v-model="departmentId"
+  :options="departments"
+  depth-key="depth"
+  secondary-label-key="breadcrumb"
+/>
+```
+
+По умолчанию вложенные пункты **без лишнего отступа** и с **тем же размером шрифта**, что и остальной список. Отступ и размеры — только через props компонента.
+
+## Опции из API
+
+Общие мапперы — `core/client/src/core/cms/js/adminSelectOptions.js`:
+
+- `mapRoleSelectOptions(roles)`
+- `mapRoleGroupSelectOptions(groups)`
+- `POLICY_TYPE_OPTIONS`, `POLICY_ACTION_OPTIONS`, `PAGE_ACCESS_TYPE_OPTIONS`
+
+## Валидация
+
+Сообщение об ошибке — под полем (`invalid-feedback`). Класс `is-invalid` на корне `SelectBox` подсвечивает триггер красной рамкой.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Другие компоненты ядра | [`components.mdc`](../../.cursor/rules/components.mdc) |
+| Клиентские соглашения | [`client_code.mdc`](../../.cursor/rules/client_code.mdc) |
+| Структура модулей | [`modules.mdc`](../../.cursor/rules/modules.mdc) |

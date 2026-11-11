@@ -6,10 +6,17 @@ import yaml
 
 import _bootstrap  # noqa: F401
 
-from generate_modules_compose import generate, module_port, parse_modules  # noqa: E402
+from generate_modules_compose import generate, load_module_workers, module_port, parse_modules  # noqa: E402
 
 
 class GenerateModulesComposeTests(unittest.TestCase):
+    def test_monolith_worker_discovery_needs_no_django_runtime(self) -> None:
+        import sys
+        from unittest.mock import patch
+
+        with patch.dict(sys.modules, {'src.core.utils.celery.module_queues': None}):
+            self.assertEqual(load_module_workers([]), {})
+
     def test_parse_modules_csv(self) -> None:
         self.assertEqual(parse_modules('demo_mod, other'), ['demo_mod', 'other'])
         self.assertEqual(parse_modules(''), [])
@@ -37,6 +44,26 @@ class GenerateModulesComposeTests(unittest.TestCase):
             ['python', 'core/api/scripts/start_celery_worker.py', '--module=demo_mod'],
         )
         self.assertNotIn('demo_mod-beat', services)
+
+    def test_named_worker_is_its_own_service(self) -> None:
+        text = generate(
+            ['demo_mod'],
+            {'DEMO_MOD_PORT': '8123'},
+            named_workers={'demo_mod': [{'name': 'crawl', 'hostname': 'crawl_worker'}]},
+        )
+        data = yaml.safe_load(text)
+        named = data['services']['demo_mod-worker-crawl']
+        self.assertEqual(
+            named['command'],
+            [
+                'python',
+                'core/api/scripts/start_celery_worker.py',
+                '--module=demo_mod',
+                '--worker=crawl',
+            ],
+        )
+        shared = data['services']['demo_mod-worker']
+        self.assertNotIn('--worker=crawl', shared['command'])
 
     def test_microservice_beat_when_requested(self) -> None:
         text = generate(['demo_mod'], {'DEMO_MOD_PORT': '8123'}, beat_modules=frozenset({'demo_mod'}))

@@ -148,7 +148,7 @@ get_base_unit_definitions() {
 
   API_UNIT=$(cat <<UNIT
 [Unit]
-Description=Ergo API (mode from API_DEPLOY_TYPE)
+Description=Ergo API (one supervisor, API_PROCESSES Daphne children)
 After=network.target ${redis_name}.service
 Wants=${redis_name}.service
 
@@ -269,6 +269,7 @@ ExecStart=/bin/bash -lc 'cd "\$ERGO_ROOT/core" && . "\$ERGO_ROOT/virtual_env/pyt
 Restart=always
 RestartSec=5
 TimeoutStopSec=30
+ExecStopPost=${root}/virtual_env/python/bin/python ${root}/core/deployment/scripts/celery_requeue_unacked.py --quiet
 Environment=PYTHONUNBUFFERED=1
 Environment=ERGO_LOG_CONSOLE=false
 StandardOutput=null
@@ -302,6 +303,7 @@ ExecStart=/bin/bash -lc 'cd "\$ERGO_ROOT/core" && . "\$ERGO_ROOT/virtual_env/pyt
 Restart=always
 RestartSec=5
 TimeoutStopSec=30
+ExecStopPost=${root}/virtual_env/python/bin/python ${root}/core/deployment/scripts/celery_requeue_unacked.py --quiet
 Environment=PYTHONUNBUFFERED=1
 Environment=ERGO_LOG_CONSOLE=false
 StandardOutput=null

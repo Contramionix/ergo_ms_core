@@ -102,39 +102,47 @@ async def authenticate_and_get_token(base_url: str, username: str, password: str
 
 
 async def initialize_config():
-    """Инициализирует конфигурацию при запуске сервера"""
+    """Готовит URL и конфиг БД. Сбой входа в API не останавливает stdio: иначе Cursor видит 0 tools."""
     global API_BASE_URL, AUTH_TOKEN, DB_CONFIG
-    
+
+    env_vars = load_env()
+    admin_login = env_vars.get('ADMIN_LOGIN')
+    admin_password = env_vars.get('ADMIN_PASSWORD')
+    api_host = env_vars.get('API_HOST', 'localhost')
+    api_port = env_vars.get('API_PORT', '8000')
+    API_BASE_URL = f"http://{api_host}:{api_port}"
+    DB_CONFIG = load_databases_yaml()
+
+    if not admin_login or not admin_password:
+        AUTH_TOKEN = None
+        print(
+            'MCP api: нет ADMIN_LOGIN/ADMIN_PASSWORD в .env или env/mcp.env',
+            file=sys.stderr,
+        )
+        return
+
     try:
-        # Загружаем .env
-        env_vars = load_env()
-        admin_login = env_vars.get('ADMIN_LOGIN')
-        admin_password = env_vars.get('ADMIN_PASSWORD')
-        api_host = env_vars.get('API_HOST', 'localhost')
-        api_port = env_vars.get('API_PORT', '8000')
-        
-        if not admin_login or not admin_password:
-            raise ValueError(
-                'ADMIN_LOGIN и ADMIN_PASSWORD должны быть указаны в .env или env/mcp.env'
-            )
-        
-        # Формируем базовый URL API
-        API_BASE_URL = f"http://{api_host}:{api_port}"
-        
-        # Получаем токен авторизации
         AUTH_TOKEN = await authenticate_and_get_token(API_BASE_URL, admin_login, admin_password)
-        
-        # Загружаем конфигурацию БД
-        DB_CONFIG = load_databases_yaml()
-        
-        print(f"✓ MCP сервер инициализирован", file=sys.stderr)
-        print(f"  - API URL: {API_BASE_URL}", file=sys.stderr)
-        print(f"  - Авторизация: успешно", file=sys.stderr)
-        print(f"  - БД конфигурация: загружена ({len(DB_CONFIG)} баз данных)", file=sys.stderr)
-        
+        print(f"MCP api: авторизация успешна, API {API_BASE_URL}", file=sys.stderr)
     except Exception as e:
-        print(f"✗ Ошибка инициализации: {str(e)}", file=sys.stderr)
-        raise
+        AUTH_TOKEN = None
+        print(f"MCP api: API недоступен, инструменты без токена: {e}", file=sys.stderr)
+
+
+async def ensure_auth() -> Optional[list[TextContent]]:
+    """Повторяет вход, если при старте API ещё не отвечал."""
+    if AUTH_TOKEN:
+        return None
+    await initialize_config()
+    if AUTH_TOKEN:
+        return None
+    return [TextContent(
+        type="text",
+        text=json.dumps({
+            "error": "Нет токена API. Проверьте, что Django запущен, и ADMIN_LOGIN/ADMIN_PASSWORD в .env или env/mcp.env",
+            "api": API_BASE_URL,
+        }, ensure_ascii=False, indent=2),
+    )]
 
 
 @server.list_tools()
@@ -197,8 +205,14 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     """Обработка вызовов инструментов"""
     
     if name == "api_request":
+        auth_error = await ensure_auth()
+        if auth_error:
+            return auth_error
         return await handle_api_request(arguments)
     elif name == "api_get_endpoints":
+        auth_error = await ensure_auth()
+        if auth_error:
+            return auth_error
         return await handle_get_endpoints()
     elif name == "api_get_db_config":
         return await handle_get_db_config(arguments)

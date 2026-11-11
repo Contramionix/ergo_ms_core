@@ -30,6 +30,17 @@ def reset_impl():
     _impl = None
 
 
+def _portable_npx_path() -> Optional[Path]:
+    """npx из portable Node, не из PATH процесса Cursor."""
+    root = Path(__file__).resolve().parent.parent
+    base = root / 'virtual_env' / 'packages' / 'nodejs'
+    if sys.platform == 'win32':
+        candidate = base / 'npx.cmd'
+    else:
+        candidate = base / 'bin' / 'npx'
+    return candidate if candidate.is_file() else None
+
+
 class WindowsImpl:
     def get_venv_python_path(self, venv_dir: Path) -> Path:
         return venv_dir / 'Scripts' / 'python.exe'
@@ -38,6 +49,9 @@ class WindowsImpl:
         return {'creationflags': subprocess.CREATE_NO_WINDOW}
 
     def get_npx_executable(self) -> Optional[str]:
+        portable = _portable_npx_path()
+        if portable is not None:
+            return str(portable)
         return shutil.which('npx.cmd') or shutil.which('npx')
 
 
@@ -52,6 +66,9 @@ class LinuxImpl:
         return {'start_new_session': True}
 
     def get_npx_executable(self) -> Optional[str]:
+        portable = _portable_npx_path()
+        if portable is not None:
+            return str(portable)
         return shutil.which('npx')
 
 

@@ -1,0 +1,120 @@
+---
+paths:
+  - "**/cli_messages.yaml"
+  - "**/cli_messages/**"
+  - "**/console_tags.py"
+  - "**/cli_locale.py"
+  - "**/ergoms_console.py"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Метки консольного вывода ergoms
+
+## Кратко
+
+- **Текст** для человека — из каталогов локализации CLI: `core/deployment/locales/<lang>/cli_messages.yaml` (опционально `cli_messages/*.yaml`). Доступ: `t('key')` в Python, `Write-ErgomsMessage -Key` / `write_ergoms_message --key` в shell.
+- **Источник строк** — русский в основных YAML; переводы — overlay-файлы той же структуры в `locales/<lang>/`. Пропущенный перевод → русский fallback.
+- **Язык CLI**: `ERGO_CLI_LANGUAGE` (`.env` / процесс) → системная локаль → `ru`. `DEFAULT_LANGUAGE` для CLI **не** используется.
+- **Метки** в начале строки — **только английские**, как в логах API: `[OK]`, `[ERROR]`, `[WARNING]`, `[SKIP]`, `[INFO]`.
+- **Запрещено** переводить метки: `[ПРОПУСК]`, `[ОШИБКА]`, `[ПРЕДУПРЕЖДЕНИЕ]`.
+- Реализация — [`cli_locale.py`](../../core/deployment/cli_locale.py); метки — [`console_tags.py`](../../core/deployment/console_tags.py).
+
+## Обязательно
+
+| Уровень | Метка | Когда |
+|---------|-------|--------|
+| Успех | `[OK]` | Операция выполнена |
+| Ошибка | `[ERROR]` | Команда не может продолжиться |
+| Предупреждение | `[WARNING]` | Некритичное отклонение |
+| Пропуск | `[SKIP]` | Шаг не нужен (уже пусто, не найдено) |
+| Информация | `[INFO]` | Нейтральная справка в консоли |
+
+Python:
+
+```python
+from cli_locale import t
+from console_tags import format_console
+
+print(format_console('skip', t('clean.path_not_found', label=label)))
+raise SystemExit(format_console('error', t('project_root_not_found')))
+```
+
+Bash (после `source core.sh`):
+
+```bash
+echo "$(format_ergo_console skip "$label не найден")"
+echo "${ERGO_TAG_ERROR} Виртуальное окружение не найдено" >&2
+```
+
+PowerShell:
+
+```powershell
+Write-ColorOutput (Format-ErgoConsole -Level skip -Message "$Label не найден") Gray
+Write-ColorOutput "$($script:ErgoTagError) Не удалось запустить службу" Red
+```
+
+CLI через Python (UTF-8 в PowerShell 5.1):
+
+```bash
+ergoms-console --tag error --text "сообщение" --stderr
+# или ключ из ergoms_console.py: --key unknown_command --param name=foo
+```
+
+## Не путать с logging API
+
+| Контекст | Формат | Где |
+|----------|--------|-----|
+| Консоль ergoms / deployment | `[OK]`, `[ERROR]`, … + локализованный текст (`t`) | `ergoms clean`, setup, nginx |
+| Файлы `logs/*.log` | `[INFO]`, `[WARNING]`, `[ERROR]` + timestamp + logger | [`logging_config.py`](../../core/api/src/config/logging_config.py) |
+
+Уровни logging **не** переводить и **не** заменять на `[OK]`/`[SKIP]`.
+
+## Запрещено
+
+```python
+# BAD — русская метка
+print('[ОШИБКА] Не найден каталог')
+
+# BAD — дублировать строку метки вручную в новом коде Python
+print('[ERROR] ...')  # без format_console / console_tags
+```
+
+```powershell
+# BAD
+Write-ColorOutput "[ПРОПУСК] уже пуст" Gray
+```
+
+## Базовый пример (clean)
+
+```
+[SKIP] virtual_env/npm/node_modules не найден
+[OK] Удалено 6 элементов из virtual_env/python
+[ERROR] Не удалось удалить virtual_env/npm/node_modules
+```
+
+Заголовки шагов без метки — через `t('…')`: `-> Шаг 2/9: очистка virtual_env/python...`
+
+## Скрипты ergoms и терминал VS Code
+
+Сообщения для человека в **`core/deployment/scripts/`** (в т.ч. `start_client_if_dev.py`, `nginx_foreground.py`, `ergoms_console.py`) и в shell/PowerShell развёртывания — **ключи `cli_messages`**, не литералы в коде; метки — `[OK]` / `[INFO]` / `[ERROR]` через [`console_tags.py`](../../core/deployment/console_tags.py).
+
+Новые строки добавляй в `core/deployment/locales/ru/cli_messages.yaml` (+ overlay в `locales/en/`, `locales/fr/` и др.).
+
+**Запрещено** в пользовательском выводе:
+
+- хардкод пользовательского текста вместо `t('key')` / `Write-ErgomsMessage -Key`;
+- префикс `[ergoms]` без метки уровня — используй `format_console('info', t('…'))`.
+
+**Допустимо на английском:** сырой вывод nginx (`nginx: configuration file … test is successful`), tasklist, traceback сторонних инструментов — **не переводить**.
+
+Эталон подсказок при `ergoms start-client` с nginx: [`nginx_foreground.py`](../../core/deployment/scripts/nginx_foreground.py).
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Файлы logs/, RotatingFileHandler | [`logging.mdc`](../../.cursor/rules/logging.mdc) |
+| ergoms, commands.conf | [`ergoms-commands.mdc`](../../.cursor/rules/ergoms-commands.mdc) |
+| Локализация CLI | [`cli_locale.py`](../../core/deployment/cli_locale.py) |
+| Справка help (overlays) | [`ergoms-module-help.mdc`](../../.cursor/rules/ergoms-module-help.mdc) |
+| Стиль русского текста | [`writing-docs-and-rules.mdc`](../../.cursor/rules/writing-docs-and-rules.mdc) |

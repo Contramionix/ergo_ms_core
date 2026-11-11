@@ -29,9 +29,14 @@ alwaysApply: false
   @close="show = false"
 >
   ...
+  <template #header-actions>
+    <button type="button" class="ui-btn ui-btn--secondary" @click="onDownload">Скачать</button>
+  </template>
   <template #footer>...</template>
 </ModalCenter>
 ```
+
+Слот `header-actions` — кнопки справа в шапке, перед крестиком. Так действие вроде «Скачать» не прячется в футере.
 
 Полезные props: `size` (sm/md/lg/xl/fullscreen), `close-on-esc`, `close-on-backdrop`, `show-close-button`, `dialog-style`, `backdrop-effect` (`dim` | `blur` | `both`), `backdrop-blur`.
 

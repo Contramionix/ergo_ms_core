@@ -66,6 +66,11 @@ def main(argv: list[str] | None = None) -> int:
         choices=('docker', 'host', 'os-services'),
     )
     parser.add_argument('--spec', action='append', default=[])
+    parser.add_argument(
+        '--strict',
+        action='store_true',
+        help='treat a skipped required check as a failure',
+    )
     args = parser.parse_args(argv)
     configure_stdio_utf8()
 
@@ -84,8 +89,12 @@ def main(argv: list[str] | None = None) -> int:
         spec_ids=args.spec or None,
     )
     print_report(report)
-    if report.exit_code() != 0:
-        print(format_console('error', t('system_test_live_failed')), file=sys.stderr)
+    if report.exit_code(strict=args.strict) != 0:
+        if args.strict and report.skipped and not report.failed:
+            names = ', '.join(item.name for item in report.skipped)
+            print(format_console('error', t('system_test_strict_skip', names=names)), file=sys.stderr)
+        else:
+            print(format_console('error', t('system_test_live_failed')), file=sys.stderr)
         return 1
     print(format_console('ok', t('system_test_live_ok')))
     return 0

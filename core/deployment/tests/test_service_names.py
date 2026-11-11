@@ -48,6 +48,14 @@ class ServiceNamesTests(unittest.TestCase):
         self.assertEqual(module_service_name('demo', 'beat', 'ergo_st_m'), 'ergo_st_m_module_demo_beat')
         self.assertEqual(names.parse_module_unit('ergo_st_m_module_demo_api'), ('demo', 'api'))
         self.assertEqual(parse_module_unit('ergo_st_m_module_demo_worker', 'ergo_st_m'), ('demo', 'worker'))
+        self.assertEqual(
+            parse_module_unit('ergo_st_m_module_demo_worker_crawl', 'ergo_st_m'),
+            ('demo', 'worker'),
+        )
+        self.assertEqual(
+            names.module_worker('demo', 'crawl'),
+            'ergo_st_m_module_demo_worker_crawl',
+        )
         self.assertEqual(parse_module_unit('ergo_st_m_module_demo_beat.service', 'ergo_st_m'), ('demo', 'beat'))
         self.assertIsNone(names.parse_module_unit('ergo_st_m_celery_worker_heavy'))
 

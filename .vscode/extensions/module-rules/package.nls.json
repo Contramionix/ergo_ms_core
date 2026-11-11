@@ -1,5 +1,5 @@
 {
   "extension.displayName": "ERGO MS Module Cursor Rules",
-  "extension.description": "Picks up .cursor/rules/*.mdc from modules/ via the Cursor plugins API",
-  "command.sync.title": "ERGO MS: Sync Module Cursor Rules"
+  "extension.description": "Drops duplicate module rule plugins; Cursor reads nested .cursor/rules itself",
+  "command.sync.title": "ERGO MS: Drop duplicate module rule copies"
 }

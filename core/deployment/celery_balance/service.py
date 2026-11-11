@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,11 @@ class BalanceSnapshot:
     plans: list[WorkerPlan]
     forecast: Forecast
     overlay_path: Path | None
+    cluster_nodes: list[Any] = field(default_factory=list)
+    cluster_plans: list[Any] = field(default_factory=list)
+    cluster_note: str = ''
+    allowed_queues: list[str] | None = None
+    quarantine: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -36,6 +41,17 @@ class BalanceSnapshot:
             'forecast': self.forecast.to_dict(),
             'plans': [item.to_dict() for item in self.plans],
             'overlay_path': str(self.overlay_path) if self.overlay_path else None,
+            'cluster_note': self.cluster_note,
+            'quarantine': list(self.quarantine),
+            'allowed_queues': self.allowed_queues,
+            'cluster_nodes': [
+                item.to_dict() if hasattr(item, 'to_dict') else item
+                for item in self.cluster_nodes
+            ],
+            'cluster_plans': [
+                item.to_overlay() if hasattr(item, 'to_overlay') else item
+                for item in self.cluster_plans
+            ],
         }
 
 
@@ -49,6 +65,10 @@ def extra_queue_names(workers_file: WorkersFile, cached: list[str]) -> list[str]
 def collect_snapshot(project_root: Path) -> BalanceSnapshot:
     settings = load_settings(project_root)
     budget = sample_budget(project_root, settings)
+    if settings.egress_url:
+        from celery_balance.egress import probe_egress
+
+        budget = replace(budget, egress_ok=probe_egress(settings.egress_url))
     workers_file = load_workers_file(project_root)
     cached = load_queue_names(project_root)
     extras = extra_queue_names(workers_file, cached)
@@ -87,6 +107,8 @@ def persist_snapshot(project_root: Path, snapshot: BalanceSnapshot) -> Path:
         forecast=snapshot.forecast.to_dict(),
         workers=snapshot.plans,
         yaml_workers=snapshot.workers_file.to_dict(),
+        allowed_queues=snapshot.allowed_queues,
+        node_id=snapshot.settings.node_id if snapshot.settings.cluster_enabled else None,
     )
     snapshot.overlay_path = path
     return path

@@ -1,0 +1,268 @@
+---
+paths:
+  - "**/theme-defaults.js"
+  - "**/theme-bootstrap.scss"
+  - "core/client/src/modules/themes/**"
+  - "core/client/src/scss/**"
+  - "**/*Theme*.vue"
+  - "**/*ThemeScope*"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Темы оформления
+
+## Кратко
+
+- **Сайт (ядро + оболочка):** `theme-manager.js` на `<html>`, активная тема — `GET settings/themes/active/`, редактор — `/settings/themes` (область «Сайт»).
+- **Модуль с отдельной палитрой:** только hook `theme-defaults.js` + `theme-bootstrap.scss`, runtime — `ModuleThemeScope`, управление — тот же редактор (область «Модуль»). **Пара light+dark** — вариант выбирается по **глобальному** режиму пользователя (светлая / тёмная / авто), нельзя активировать только один вариант.
+- **Модуль без отдельной палитры:** стили через `var(--ui-*)` / `var(--color-*)`, hook темы **не** нужен.
+- В модуле с hook: `useModuleThemeMode`, не `useThemeMode`. Графики — слушать `ergo:module-theme-change` (и при необходимости `ergo:theme-change` для оболочки).
+
+---
+
+## Когда какая схема
+
+| Ситуация | Что делать |
+|----------|------------|
+| Обычные страницы модуля, достаточно цветов сайта | `var(--ui-*)` в SCSS, без `theme-defaults.js` |
+| Отдельная палитра модуля (другой accent, фоны, неоновые токены) | **Обязательно** hook + редактор ядра — см. раздел «Модульные темы» |
+| Страницы ядра (CMS, админка) | Глобальная тема, `useThemeMode` |
+| Шапка и боковое меню на страницах модуля | Всегда **глобальная** тема сайта, не модульная |
+
+Эталон модульной темы: `modules/<name>/client/js/theme-defaults.js`, `modules/<name>/client/styles/theme-bootstrap.scss`.
+
+---
+
+## Глобальная тема (сайт)
+
+Переключение светлая / тёмная / авто — настройки пользователя и `theme-manager.js`. На `<html>` ставится `data-bs-theme`. Активная палитра — модель `Theme` (`module_key` пустой), кеш `localStorage['activeTheme']`.
+
+### Цвета в стилях
+
+Не хардкодь `#fff`, `#212529` и т.п. Используй переменные:
+
+```scss
+.card {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+}
+```
+
+Приоритет: `--ui-*` → `--color-*` → `--bs-*`.
+
+Тёмная тема: селектор `[data-bs-theme='dark']`, не отдельный класс на компоненте.
+
+Токены ядра: [`core/client/src/scss/_theme.scss`](../../core/client/src/scss/_theme.scss), [`core/client/src/scss/ui/_tokens.scss`](../../core/client/src/scss/ui/_tokens.scss).  
+Не копируй `_tokens.scss` в модуль — не импортируй `ui/scss/index.scss` в `routes.js` (уже в `styles.scss`).
+
+### JavaScript (ядро и модули без отдельной палитры)
+
+```js
+import { useThemeMode } from '@/composables/useThemeMode.js'
+import { useApexTheme, buildApexOptions } from '@/composables/useApexTheme.js'
+```
+
+Не читай тему из `localStorage` вручную.  
+Графики (Apex/canvas) — пересобирай при смене темы через `useThemeMode` или событие `ergo:theme-change`.
+
+Новые **глобальные** UI-токены `--ui-*` — только в `core/client/src/scss/ui/`.
+
+---
+
+## Модульные темы
+
+Модуль с **отдельной палитрой** регистрирует тему через hook-файлы; ядро применяет её **только в контенте** маршрутов модуля. Оболочка (шапка, боковое меню) остаётся на глобальной теме.
+
+### Инфраструктура ядра (не дублировать в модуле)
+
+| Компонент | Путь |
+|-----------|------|
+| Scoped-обёртка | [`ModuleThemeScope.vue`](../../core/client/src/components/ModuleThemeScope.vue) в [`RouteViewAnimated.vue`](../../core/client/src/components/RouteViewAnimated.vue) |
+| Runtime CSS модуля | [`module-theme-manager.js`](../../core/client/src/js/module-theme-manager.js), [`module-theme-service.js`](../../core/client/src/js/module-theme-service.js) |
+| Генерация CSS | [`theme-css-builder.js`](../../core/client/src/js/theme-css-builder.js) |
+| Discovery manifest'ов | [`ThemeDefaultsManager.js`](../../core/client/src/modules/themes/ThemeDefaultsManager.js), glob `client/js/theme-defaults.js` |
+| Редактор | [`/settings/themes`](../../core/client/src/core/cms/adp/settings/themeEditor/ThemeEditor.vue) — SelectBox «Область» |
+| API | `GET settings/themes/active/?module=<ключ>` (ответ — **пара** `variants.light` / `variants.dark`), `GET settings/themes/?module=<ключ>&as_pairs=true`, `POST settings/themes/sync-module-defaults/` |
+| Модель | `Theme.module_key`, `Theme.module_pair`, `Theme.module_tokens` в [`settings/models.py`](../../core/api/src/core/settings/models.py) |
+
+`route.meta.moduleKey` проставляет [`RouteManager.js`](../../core/client/src/modules/routes/RouteManager.js) автоматически для внешних модулей.
+
+### Обязательно (модуль с отдельной палитрой)
+
+1. **`client/js/theme-defaults.js`** — единственный источник дефолтов для API и редактора (`moduleKey`, `modulePair`, `colors`, `moduleTokens`, `systemThemes` — **две** записи с одним `module_pair` и разным `base_theme`: `light` и `dark`).
+2. **`client/styles/theme-bootstrap.scss`** — алиасы `--<module>-*` на `var(--color-*)` / `var(--ui-*)`; импорт **один раз** в `client/js/routes.js`.
+3. Цвета, которые админ может менять в редакторе — через CSS-переменные (`--color-*`, `--<module>-*`), **не** через хардкод hex в компонентах.
+4. **`useModuleThemeMode('module_key')`** (или без аргумента внутри `ModuleThemeScope`) для light/dark **внутри** модуля.
+5. Активация — **вся пара** целиком в `/settings/themes` → область модуля; отображаемый вариант следует глобальной теме сайта (`theme-manager.js`, `ergo:theme-change`). Синхронизация системных пар — `POST settings/themes/sync-module-defaults/`.
+6. Модалки и overlay модуля — рендер **внутри** scope: `ModalCenter` без `standalone` (в режиме `standalone` он телепортирует разметку в `body`) либо содержимое, обёрнутое в `ModuleThemeScope` — см. [`modal-center.mdc`](../../.cursor/rules/modal-center.mdc).
+
+### Hook `theme-defaults.js`
+
+```js
+/** modules/<имя>/client/js/theme-defaults.js */
+export default {
+  moduleKey: '<name>',
+  displayName: 'Мой модуль',
+  modulePair: 'default',
+  baseTheme: 'dark',
+  colors: {
+    accent: '#3ae8ff',
+    background: '#050508',
+    // … остальные ключи COLOR_VAR_MAP из theme-manager
+  },
+  bootstrap_colors: {},
+  moduleTokens: {
+    neonCyan: '#3ae8ff',
+    glowCyan: '0 0 20px rgba(58, 232, 255, 0.4)',
+  },
+  systemThemes: [
+    { name: 'Мой модуль', base_theme: 'dark', module_pair: 'default', is_default: true },
+    { name: 'Мой модуль', base_theme: 'light', module_pair: 'default', is_default: true, colors: { /* светлые */ } },
+  ],
+}
+```
+
+Ключ `modulePair` / `module_pair` в `systemThemes` связывает light и dark в одну активируемую пару.
+
+Ключи `colors` — те же 10 полей, что в [`theme-manager.js`](../../core/client/src/js/theme-manager.js) / [`bootstrap-variables.js`](../../core/client/src/js/bootstrap-variables.js).  
+`moduleTokens` → runtime CSS `--<module-key-kebab>-<token-kebab>` (например `neonCyan` при `moduleKey: '<name>'` → `--<name-kebab>-neon-cyan`).
+
+### Hook `theme-bootstrap.scss`
+
+```scss
+// modules/<имя>/client/styles/theme-bootstrap.scss
+[data-ergo-module-theme='<name>'] {
+  --mod-accent: var(--color-accent);
+  --mod-bg-primary: var(--color-background);
+  --mod-neon-cyan: var(--<name-kebab>-neon-cyan, #3ae8ff);
+}
+```
+
+В компонентах модуля: `var(--mod-bg-primary)`, не `$dark-bg-primary` и не `#050508`.
+
+### JavaScript внутри модуля с hook
+
+```js
+import { useModuleThemeMode } from '@/composables/useModuleThemeMode.js'
+
+const { isDark, isLight, resolvedMode } = useModuleThemeMode('<name>')
+```
+
+Графики в модуле с отдельной палитрой — подписка на `ergo:module-theme-change` (см. [`module-theme-manager.js`](../../core/client/src/js/module-theme-manager.js)) в дополнение к `ergo:theme-change`, если виджет реагирует на оболочку.
+
+### Плохо / хорошо
+
+```scss
+/* BAD — локальная палитра, обход системы тем */
+$neon-cyan: #3ae8ff;
+.panel { background: #050508; border: 1px solid $neon-cyan; }
+
+/* GOOD — палитра из scope модульной темы */
+.panel {
+  background: var(--mod-bg-primary);
+  border: 1px solid var(--mod-neon-cyan);
+}
+```
+
+```js
+// BAD — в модуле с theme-defaults.js читается глобальный html
+import { useThemeMode } from '@/composables/useThemeMode.js'
+const { isDark } = useThemeMode()
+
+// GOOD
+import { useModuleThemeMode } from '@/composables/useModuleThemeMode.js'
+const { isDark } = useModuleThemeMode('<name>')
+```
+
+```vue
+<!-- BAD — свой редактор или хранение темы в модуле -->
+<ThemeEditorPanel v-model="localTheme" />
+
+<!-- BAD — модалка вне scope -->
+<Teleport to="body"><MyModal /></Teleport>
+```
+
+```js
+// BAD — дублирование дефолтов только в SCSS, без theme-defaults.js
+// Редактор и API не увидят палитру
+
+// GOOD — дефолты в theme-defaults.js; SCSS только алиасы на var(--color-*)
+```
+
+### Запрещено (модульные темы)
+
+- Отдельная палитра модуля **без** `theme-defaults.js` (hex в `_variables.scss`, `$dark-bg-*` и т.п.)
+- Редактор тем, страница настроек темы, CRUD темы в модуле
+- `useThemeMode()` на страницах модуля с зарегистрированной модульной темой
+- Инжект `<style>` с палитрой модуля вручную — только `module-theme-manager` ядра
+- Teleport модалок модуля в `body` (теряется `data-ergo-module-theme`)
+- Копирование `theme-manager.js` / `ModuleThemeScope` в модуль
+- Активировать только светлый или только тёмный вариант модуля отдельно от пары
+- Разный `module_pair` для light и dark одного набора
+
+---
+
+## Шрифты — только локально / system stack
+
+**Запрещено** подключать шрифты с внешних CDN и сторонних доменов:
+
+- `@import url('https://fonts.googleapis.com/...')`, `fonts.gstatic.com`, Adobe Fonts, Fontshare и любые другие CDN
+- `<link href="https://...fonts..." rel="stylesheet">` в Vue/HTML
+- динамическое создание `<link>` / `@font-face` с `src: url(https://...)` в JS или SCSS
+- `@font-face` с URL вне репозитория (только файлы из проекта)
+
+Причины: CSP (`style-src` / `font-src 'self'`), приватность, офлайн, единый вид.
+
+**Правильно:**
+
+```scss
+.my-block {
+  font-family: var(--font-family-base);
+}
+
+.my-block--inter {
+  font-family: var(--font-family-inter);
+}
+
+code, pre {
+  font-family: var(--font-family-mono);
+}
+```
+
+Эталонные токены в `core/client/src/scss/ui/_tokens.scss`:
+
+- `--font-family-base` — системный stack (Segoe UI, Roboto, …)
+- `--font-family-mono` — monospace stack
+- `--font-family-inter` — локальный Inter (вариативный, SIL OFL), подключать явно
+
+Модули **не** объявляют свой `@font-face` и **не** копируют font-family из Google Fonts (`Geologica` и т.п.). Допустимы `var(--font-family-base)`, `var(--font-family-mono)`, `var(--font-family-inter)` или `inherit`. Сырое имя `Inter` в модулях не писать — только токен.
+
+**Локальное размещение шрифтов** (если понадобится не-system шрифт):
+
+- файлы `.woff2` / `.woff` только в `core/client/src/assets/fonts/` (или `core/client/public/fonts/`)
+- `@font-face` с относительным `url()` на эти файлы — **только в ядре**, не в модулях
+- новый `--font-family-*` токен — только в `_tokens.scss`
+
+**В JS** (ApexCharts, canvas): `fontFamily: 'system-ui, sans-serif'` или CSS-переменная, не имя шрифта с CDN.
+
+---
+
+## Запрещено (общее)
+
+- Локальные палитры, не связанные с `--ui-*` / `--color-*` / модульными `--<module>-*`
+- Только `@media (prefers-color-scheme: dark)` без учёта выбора пользователя
+- Редактор тем в модуле (только ядро, `/settings/themes`)
+- **Любые внешние шрифты** (см. раздел «Шрифты» выше)
+- Обход `theme-defaults.js` для модуля с отдельной визуальной идентичностью
+
+---
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Структура модулей, hook-файлы | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Клиент Vue | [`client_code.mdc`](../../.cursor/rules/client_code.mdc) |
+| Компоненты UI | [`components.mdc`](../../.cursor/rules/components.mdc) |
+| Безопасность (CSP) | [`security.mdc`](../../.cursor/rules/security.mdc) |

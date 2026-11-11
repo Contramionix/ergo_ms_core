@@ -105,6 +105,53 @@ def load_workers_file(project_root: Path) -> WorkersFile:
     return WorkersFile(path=path, workers=tuple(workers), defaults=defaults, exists=exists)
 
 
+def _names_from_workers_file(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    try:
+        data = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+    except Exception:  # noqa: BLE001
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    names: set[str] = set()
+    workers = data.get('workers')
+    raw_items: list[Any] = []
+    if isinstance(workers, list):
+        raw_items.extend(workers)
+    elif isinstance(workers, dict):
+        raw_items.extend(workers.values())
+    legacy = data.get('queues')
+    if isinstance(legacy, list):
+        raw_items.extend(legacy)
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        queues = item.get('queues')
+        if isinstance(queues, list):
+            names.update(str(name).strip() for name in queues if str(name).strip())
+        elif isinstance(queues, str) and queues.strip() and queues.strip() != 'all':
+            names.update(part.strip() for part in queues.split(',') if part.strip())
+        elif item.get('name') and 'queues' not in item:
+            names.add(str(item['name']).strip())
+    return {name for name in names if name}
+
+
+def declared_module_queues(project_root: Path) -> set[str]:
+    """Очереди именованных воркеров модулей. Их нет в кэше общего worker."""
+    from lifecycle.modules.catalog import ModuleCatalog
+
+    names: set[str] = set()
+    try:
+        module_dirs = list(ModuleCatalog.from_env(project_root).iter_module_dirs())
+    except Exception:  # noqa: BLE001
+        return names
+    for module_dir in module_dirs:
+        names.update(_names_from_workers_file(module_dir / 'celery_workers.yaml'))
+        names.update(_names_from_workers_file(module_dir / 'dedicated_queues.yaml'))
+    return names
+
+
 def resolve_worker_queues(queues_config: Any, all_queues: list[str]) -> list[str]:
     if queues_config == 'all' or queues_config is None:
         names = set(all_queues)

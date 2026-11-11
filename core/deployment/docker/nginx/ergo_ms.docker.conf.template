@@ -12,14 +12,20 @@ ${ERGO_MEDIA_UPSTREAM_BLOCK}
 ${ERGO_MODULE_UPSTREAMS}
 
 server {
-    listen ${NGINX_LISTEN_PORT};
+    ${ERGO_DOCKER_LISTEN}
     server_name ${NGINX_SERVER_NAME};
+    ${ERGO_DOCKER_TLS}
 
     ${ERGO_DOCKER_SECURITY_HEADERS}
     ${ERGO_DOCKER_PROXY_PARAMS}
 
     root /usr/share/nginx/html;
     index index.html;
+    tcp_nopush on;
+    gzip_static on;
+    open_file_cache max=10000 inactive=20s;
+    open_file_cache_valid 30s;
+    open_file_cache_min_uses 2;
 
     # Вычисляется из MEDIA_UPLOAD_MAX_SIZE + direct-upload env (upload_limits.py)
     client_max_body_size ${ERGO_CLIENT_MAX_BODY_SIZE};
@@ -86,12 +92,5 @@ ${ERGO_CORE_PROXY_LOCATIONS}
         access_log off;
     }
 
-    location /jupyter/ {
-        proxy_pass http://jupyter:${API_JUPYTER_BIND_PORT}/jupyter/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
+    ${ERGO_DOCKER_JUPYTER_LOCATION}
 }

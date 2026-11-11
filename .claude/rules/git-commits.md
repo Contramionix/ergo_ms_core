@@ -1,0 +1,9 @@
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Куда коммитить
+
+«Закоммить» не значит коммит в корне workspace. Сначала `git -C <каталог_файла> rev-parse --show-toplevel`. Коммит и push — только в репозитории файла. Текст сообщения — [`.cursorrules`](../../.cursorrules).
+
+Обёртка `ergo_ms`: `.cursor/rules/`, `.docs/`, `core/deployment/`, `.gitmodules`, корневые `.gitignore`, `.cursorrules`, примеры env. Свой репозиторий: `core/api`, `core/client`, `core/media_api`, `core/.github`, `modules/<name>`. В `.gitmodules` стоит `ignore = all`: обёртка не фиксирует каждый новый SHA.
+
+Два репозитория — два коммита. Указатель submodule (`git add core/client`, `git add modules/<name>`) обновляй только если пользователь просит закрепить SHA. Не смешивай в одном коммите обёртки её файлы и смену SHA. Не обновляй указатель следом за коммитом в submodule.

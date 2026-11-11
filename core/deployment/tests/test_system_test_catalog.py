@@ -14,6 +14,7 @@ from system_test.catalog import (  # noqa: E402
 from system_test.cases.scenarios import AGENT_SPECS  # noqa: E402
 from system_test.docker_env import DockerEnvironment  # noqa: E402
 from system_test.os_services_env import OsServicesEnvironment  # noqa: E402
+from system_test.report import CaseResult, SuiteReport  # noqa: E402
 from system_test.suite import SystemSuite  # noqa: E402
 from system_test.worktree_env import HostWorktreeEnvironment  # noqa: E402
 
@@ -56,6 +57,14 @@ class SystemTestCatalogTests(unittest.TestCase):
         self.assertIsInstance(os_env, OsServicesEnvironment)
         self.assertTrue(docker.prefix.startswith('ergo_st_'))
         self.assertTrue(os_env.prefix.startswith('ergo_st_'))
+
+    def test_strict_skip_is_a_failure(self) -> None:
+        report = SuiteReport()
+        report.add(CaseResult('environment', 'security', 'skip', 'нет Docker'))
+        self.assertEqual(report.exit_code(), 0)
+        self.assertEqual(report.exit_code(strict=True), 1)
+        report.add(CaseResult('security_live', 'security', 'fail', 'anon=200'))
+        self.assertEqual(report.exit_code(strict=True), 1)
 
 
 if __name__ == '__main__':

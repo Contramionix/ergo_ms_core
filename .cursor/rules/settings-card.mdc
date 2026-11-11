@@ -1,0 +1,33 @@
+---
+description: UI ядра — Настройки — SettingsCard / SettingsCardRow
+alwaysApply: false
+---
+
+## Настройки — SettingsCard / SettingsCardRow
+
+Компоненты: `@/components/SettingsCard.vue`, `@/components/SettingsCardRow.vue`.
+
+Карточки панелей пользовательских настроек (система, темы, тосты, безопасность, уведомления). Не копируй локальные `.settings-card*`.
+
+```vue
+<SettingsCard>
+  <SettingsCardRow label="Язык" label-for="lang">
+    <SelectBox id="lang" v-model="language" :options="options" :include-all-option="false" />
+  </SettingsCardRow>
+  <SettingsCardRow label="Звук" hint="Подсказка" control-size="auto" last>
+    <div class="form-check form-switch">…</div>
+  </SettingsCardRow>
+</SettingsCard>
+```
+
+| Prop / слот | Когда |
+|------|-------|
+| `SettingsCard` `overflowVisible` | палитра / dropdown выходит за карточку |
+| `SettingsCard` `#footer` | действия справа внизу карточки (как «Сохранить» в профиле) |
+| `SettingsCard` `showFooter` | плавно показать/скрыть футер (например, по тумблеру) |
+| `SettingsCardRow` `label` / `hint` / `labelFor` | подпись, подсказка, `for` |
+| `last` | без нижней границы |
+| `block` | контент на всю ширину без колонок label/control |
+| `controlSize` `md` / `sm` / `auto` | ширина слота контрола (SelectBox / компакт / switch/кнопка) |
+
+Эталон: панели в [`settings-panels/`](../../core/client/src/core/cms/adp/user/account/component/settings-panels/).

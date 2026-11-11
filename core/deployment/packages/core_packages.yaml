@@ -68,3 +68,69 @@ packages:
     pass_root: true
     marker_windows: meilisearch.exe
     marker_linux: meilisearch
+
+  libreoffice:
+    kind: custom
+    dest: libreoffice
+    version: "25.8.7"
+    installer: packages/installers/libreoffice.py
+    always_run: true
+    supports_refresh: true
+    supported_platforms: [windows, linux]
+    marker_windows: program/soffice.exe
+    marker_linux: program/soffice
+
+  ollama:
+    kind: custom
+    dest: ollama
+    installer: packages/installers/ollama.py
+    supports_refresh: true
+    supported_platforms: [windows, linux]
+    marker_windows: ollama.exe
+    marker_linux: ollama
+    extra_dirs: [ollama_models]
+
+  tesseract:
+    kind: custom
+    dest: tesseract
+    version: "5.5.3"
+    installer: packages/installers/tesseract.py
+    supports_refresh: true
+    swarm_worker: true
+    supported_platforms: [windows, linux]
+    marker_windows: tesseract.exe
+    marker_linux: bin/tesseract
+    minimum_sizes:
+      tesseract.exe: 1025
+      bin/tesseract: 1025
+      tessdata/rus.traineddata: 1024
+      tessdata/eng.traineddata: 1024
+    required_files:
+      windows: [tessdata/rus.traineddata, tessdata/eng.traineddata]
+      linux: [tessdata/rus.traineddata, tessdata/eng.traineddata]
+
+  chrome-for-testing:
+    kind: custom
+    dest: chrome-for-testing
+    installer: packages/installers/chrome.py
+    supports_refresh: true
+    swarm_worker: true
+    supported_platforms: [windows, linux]
+    marker_windows: VERSION
+    marker_linux: VERSION
+    required_files:
+      windows:
+        - [chrome/chrome.exe, chrome-win64/chrome.exe]
+        - [chromedriver/chromedriver.exe, chromedriver-win64/chromedriver.exe]
+      linux:
+        - [chrome/chrome, chrome-linux64/chrome]
+        - [chromedriver/chromedriver, chromedriver-linux64/chromedriver]
+
+  docker-compose:
+    kind: custom
+    dest: docker-compose
+    version: "2.29.7"
+    installer: packages/installers/docker_compose.py
+    supports_refresh: true
+    supported_platforms: [linux]
+    marker_linux: docker-compose

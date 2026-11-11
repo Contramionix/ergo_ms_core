@@ -1,36 +1,21 @@
 ---
 description: Артефакты runtime только в ERGO_ROOT; вне корня — только регистрация служб ОС
-alwaysApply: true
+globs:
+  - "core/deployment/**"
+  - "virtual_env/**"
+alwaysApply: false
 ---
 
 # Артефакты только в корне проекта
 
-Данные ERGO MS — **внутри** корня репозитория. Вне корня — только регистрация служб ОС (Windows SCM / `systemctl link|enable`) и симлинк CLI `/usr/local/bin/ergoms`.
+Данные ERGO MS лежат внутри корня репозитория. Вне корня — только регистрация служб ОС (Windows SCM, `systemctl link|enable`) и симлинк CLI `/usr/local/bin/ergoms`.
 
-Пути: [`project_layout.py`](../../core/deployment/project_layout.py). Детали и примеры — [`project-root-artifacts-details.mdc`](project-root-artifacts-details.mdc).
-
-## Кратко
+Пути задаёт [`project_layout.py`](../../core/deployment/project_layout.py). Примеры — [`project-root-artifacts-details.mdc`](project-root-artifacts-details.mdc).
 
 - Кэши, пакеты, TLS, Jupyter, temp — `virtual_env/`
 - Env и unit-файлы — `core/deployment/wrappers/`
 - Логи — `logs/`; снимки БД — `virtual_env/backups/`; CLI — `core/deployment/bin/`
-- Новый путь — сначала в `project_layout.py`, потом запись
-- **Запрещено:** `%TEMP%` / `/tmp`, `%ProgramData%`, `/etc` (кроме symlink служб), apt/dnf-certbot для данных приложения
+- Новый путь сначала попадает в `project_layout.py`
+- Запрещены `%TEMP%`, `/tmp`, `%ProgramData%`, `/etc` (кроме symlink служб) и apt/dnf-certbot для данных приложения
 
-## Исключения (не данные)
-
-| Что | Зачем |
-|---|---|
-| NSSM `install` / SCM `ergo_ms_*` | автозапуск; бинарь NSSM в `virtual_env/packages/nssm` |
-| `systemctl link` | unit остаётся в `wrappers/systemd/` |
-| Docker entrypoint в `/usr/local/lib/ergo-ms` | вне bind-mount `/app` (CRLF); CLI — из `/app/core/deployment/bin` |
-| `/usr/local/bin/ergoms` (симлинк) | чтобы `sudo` видел CLI; сам скрипт остаётся в `core/deployment/bin` |
-
-## Связанные правила
-
-| Тема | Файл |
-|---|---|
-| Детали, BAD/GOOD | [`project-root-artifacts-details.mdc`](project-root-artifacts-details.mdc) |
-| virtual_env | [`virtual-env.mdc`](virtual-env.mdc) |
-| npm workspace | [`npm-workspace.mdc`](npm-workspace.mdc) |
-| Redis / nginx / TLS | [`deployment-infra.mdc`](deployment-infra.mdc) |
+Исключения, это не данные приложения: NSSM в `virtual_env/packages/nssm`, unit при `systemctl link` остаётся в `wrappers/systemd/`, Docker entrypoint в `/usr/local/lib/ergo-ms`, симлинк `/usr/local/bin/ergoms`.

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && { python3 .claude/scripts/sync_claude_rules.py --quiet || python .claude/scripts/sync_claude_rules.py --quiet; }",
+            "timeout": 30,
+            "statusMessage": "Синхронизирую правила модулей"
+          }
+        ]
+      }
+    ]
+  }
+}

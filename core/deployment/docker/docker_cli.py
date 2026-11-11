@@ -28,6 +28,7 @@ from env_resolvers import load_merged_env  # noqa: E402
 from lifecycle.docker import ops as docker_ops  # noqa: E402
 from lifecycle.orchestrator import DeploymentOrchestrator  # noqa: E402
 from docker_stats import add_stats_arguments, run_stats  # noqa: E402
+import swarm_runtime  # noqa: E402
 
 
 def resolve_cli_project_root() -> Path:
@@ -197,6 +198,10 @@ def main() -> int:
         ('gen-workers', lambda a: docker_ops.run_generate_workers()),
         ('gen-modules', lambda a: docker_ops.run_generate_modules()),
         ('shell-api', cmd_exec_api_shell),
+        ('registry', lambda a: swarm_runtime.cmd_registry()),
+        ('swarm-push', lambda a: swarm_runtime.cmd_push()),
+        ('swarm-deploy', lambda a: swarm_runtime.cmd_deploy()),
+        ('swarm-down', lambda a: swarm_runtime.cmd_down()),
     ):
         p = sub.add_parser(name)
         p.set_defaults(handler=handler)
@@ -221,6 +226,13 @@ def main() -> int:
     stats_p.set_defaults(handler=run_stats)
 
     args = parser.parse_args()
+    from project_isolation import IsolationError, validate_project
+
+    try:
+        validate_project(resolve_cli_project_root())
+    except IsolationError as exc:
+        print(format_console('error', str(exc)), file=sys.stderr)
+        return 1
     return args.handler(args)
 
 if __name__ == '__main__':

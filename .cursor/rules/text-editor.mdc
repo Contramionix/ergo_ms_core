@@ -1,0 +1,27 @@
+---
+description: UI ядра — Текст — TextEditor
+alwaysApply: false
+---
+
+## Текст — TextEditor
+
+Компонент: `@/components/TextEditor.vue`.
+
+Редактор HTML (`contenteditable`): панель форматирования, стиль абзаца, список и дополнительные команды. Это не поле выбора значения из списка (`SelectBox`).
+
+| Prop / событие | Когда |
+|----------------|-------|
+| `content` / `update:content` | основной HTML |
+| `hintText` / `update:hintText` | HTML подсказки |
+
+Подписи панели — ключи `components.textEditor.*`.
+
+```vue
+<script setup>
+import TextEditor from '@/components/TextEditor.vue'
+</script>
+
+<template>
+  <TextEditor :content="html" @update:content="html = $event" />
+</template>
+```

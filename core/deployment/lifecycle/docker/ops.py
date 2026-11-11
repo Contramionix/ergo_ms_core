@@ -22,6 +22,7 @@ if str(_NGINX_DIR) not in sys.path:
     sys.path.insert(0, str(_NGINX_DIR))
 
 from cli_locale import t  # noqa: E402
+from project_layout import package_dir  # noqa: E402
 from console_tags import format_console  # noqa: E402
 from env_resolvers import load_merged_env  # noqa: E402
 from ergo_modes import effective_docker_enabled, effective_docker_profile_meilisearch, effective_nginx_enabled, env_bool_key  # noqa: E402
@@ -76,6 +77,12 @@ def find_docker_compose() -> list[str]:
         )
         if result.returncode == 0:
             return ['docker', 'compose']
+    # Портативный бинарник из virtual_env/packages — запасной вариант, если плагина compose в системе нет.
+    portable = package_dir(PROJECT_ROOT, 'docker-compose') / 'docker-compose'
+    if portable.is_file() and os.access(portable, os.X_OK):
+        result = subprocess.run([str(portable), 'version'], capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            return [str(portable)]
     return []
 
 
@@ -97,6 +104,9 @@ def compose_file_list(
         files.append(home / 'docker-compose.postgres.yml')
     if env_bool_key(raw_env, 'DOCKER_PROFILE_NGINX'):
         files.append(home / 'docker-compose.nginx.yml')
+        tls = home / 'docker-compose.nginx-tls.generated.yml'
+        if tls.is_file():
+            files.append(tls)
     if env_bool_key(raw_env, 'DOCKER_PROFILE_JUPYTER'):
         files.append(home / 'docker-compose.jupyter.yml')
     if env_bool_key(raw_env, 'DOCKER_PROFILE_LOADTEST'):
@@ -134,6 +144,9 @@ def compose_file_list_full(*, docker_home: Path | None = None) -> list[Path]:
         home / 'docker-compose.meilisearch.yml',
     ]
     build_cache = home / BUILD_CACHE_OUTPUT.name
+    tls = home / 'docker-compose.nginx-tls.generated.yml'
+    if tls.is_file():
+        files.append(tls)
     if build_cache.is_file():
         files.append(build_cache)
     workers = home / 'docker-compose.workers.generated.yml'
@@ -271,6 +284,9 @@ def build_compose_cmd(
         sys.exit(1)
 
     root = (project_root or PROJECT_ROOT).resolve()
+    from project_isolation import validate_project
+
+    validate_project(root)
     home = compose_docker_dir(root)
     raw = dict(load_merged_env(root))
     # Процессное окружение перекрывает .env для профилей / loadtest портов.
@@ -454,12 +470,17 @@ def _api_pythonpath_prefix() -> str:
 
 
 def api_install_shell() -> str:
-    # entrypoint делает poetry env info и подменяет PATH на пустой volume venv.
-    # Берём python образа, не poetry run.
+    # Используем уже заполненный image/volume venv. Системный Python — только
+    # bootstrap пустого окружения; установка в /usr/local одноразового контейнера
+    # не обновляет окружение, которым затем пользуются API и workers.
     return (
         'mkdir -p /app/logs/docker '
         f'&& cd /app/core/api '
-        f'&& {_api_pythonpath_prefix()} /usr/local/bin/python -m commands install '
+        '&& API_PYTHON=/usr/local/bin/python '
+        '&& for candidate in /app/virtual_env/python/bin/python /app/virtual_env/python/*/bin/python; do '
+        'if [ -x "$candidate" ] && "$candidate" -c "import django" >/dev/null 2>&1; then '
+        'API_PYTHON="$candidate"; break; fi; done '
+        f'&& {_api_pythonpath_prefix()} "$API_PYTHON" -m commands install '
         '2>&1 | tee -a /app/logs/docker/python-install.log'
     )
 

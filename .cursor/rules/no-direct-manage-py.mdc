@@ -1,38 +1,23 @@
 ---
-description: Команды проекта — только ergoms, не manage.py/pip/npm напрямую; критичное правило
+description: Команды проекта — только ergoms, не manage.py/pip/npm напрямую; одно окружение virtual_env/python
 alwaysApply: true
 priority: critical
 ---
 
 # Команды — только через ergoms
 
-Миграции, запуск, зависимости, сборка, Celery, статика — **только** `ergoms`. Не предлагай `python manage.py`, `pip`, `poetry`, `npm` как основной способ. Полный список — [`.docs/cli.md`](../../.docs/cli.md); формат — [`ergoms-commands.mdc`](ergoms-commands.mdc).
+Миграции, запуск, зависимости, сборка, Celery и статика — только `ergoms`. Не предлагай `python manage.py`, `pip`, `poetry` и `npm` как основной способ. Справочник — [`.docs/cli.md`](../../.docs/cli.md), формат — [`ergoms-commands.mdc`](ergoms-commands.mdc).
 
 | Задача | Команда |
-|--------|---------|
+|---|---|
 | Настройка | `ergoms setup` |
 | Миграции | `ergoms migrate-all` / `db-migrate` / `db-makemigrations` |
 | API / клиент | `ergoms dev` / `start-client` |
 | Сборка клиента | `ergoms client-build` |
 | Celery | `ergoms start-worker` / `start-beat` |
 | Зависимости | `ergoms python-install`, `ergoms npm install` |
-| Расширения IDE | `ergoms install-extensions` |
 | Django | `ergoms api <команда>` |
-| Справка | `ergoms help` |
 
-Модуль: `ergoms <имя>:<команда>`. Microservice: `ergoms start-worker --module=<name>`, `ergoms start-module` — [`modularization.mdc`](modularization.mdc). Правка запуска/сервиса — чеклист «Параллельные сценарии» в [`docker.mdc`](docker.mdc).
+Модуль: `ergoms <имя>:<команда>`. Не правь `manage.py`, чтобы обойти ergoms. Метки CLI — `[OK]` / `[ERROR]`, текст — `t('key')` ([`console-output.mdc`](console-output.mdc)).
 
-## Запрещено
-
-- `python manage.py …`, `pip install`, `poetry install`, `npm install` без оговорки «через ergoms»
-- Править `manage.py`, чтобы обходить ergoms (правка настроек Django — допустима; запуск всё равно через ergoms)
-
-Метки CLI — `[OK]` / `[ERROR]` / …; текст — `t('key')`. Подробности — [`console-output.mdc`](console-output.mdc).
-
-## Связанные правила
-
-| Тема | Файл |
-|------|------|
-| commands.conf | [`ergoms-commands.mdc`](ergoms-commands.mdc) |
-| Справочник | [`.docs/cli.md`](../../.docs/cli.md) |
-| venv | [`virtual-env.mdc`](virtual-env.mdc) |
+Одно окружение: portable CPython в `virtual_env/packages/python/`, venv в `virtual_env/python/` (`bin/python` на Linux, `Scripts/python.exe` на Windows). Node — `virtual_env/packages/nodejs/`, npm workspace — `virtual_env/npm/` ([`npm-workspace.mdc`](npm-workspace.mdc)). Не создавай `.venv`, не ставь пакеты мимо ergoms и не удаляй `virtual_env/` целиком. Если Python не найден: `ergoms install-python`, затем `ergoms python-install`. Подробности путей — [`virtual-env.mdc`](virtual-env.mdc).

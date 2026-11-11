@@ -114,7 +114,7 @@ SSE: location `/api/realtime/stream/` — `proxy_buffering off`, `proxy_read_tim
 - Не ставьте `limit_req_status 503`: server-level `error_page` maintenance превратит POST в GET (405)
 - Клиент: один POST на волну до следующего login (`performServerLogout` в `tokenRefresh.js`), голый axios без интерцепторов, гейт в `sessionStorage` + `localStorage` + `window`
 - Интерцептор `apiClient` не вызывает logout на сам `/logout/`
-- Проверка: `ergoms core-rules-check`, `ergoms deployment-test`, живой контур — [`system-test.mdc`](system-test.mdc)
+- Проверка: `ergoms core-rules-check`, `ergoms system-test --suite unit`, живой контур — [`system-test.mdc`](system-test.mdc)
 
 ```nginx
 # BAD — клиент ретраит 429 → шторм в access/error

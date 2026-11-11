@@ -1,6 +1,6 @@
 ---
-description: Сначала диагностика (env, сборка, перезапуск) — не чинить обходным путём в коде то, что лечится ergoms/пересборкой
-alwaysApply: true
+description: Пустой экран, старый dist, nginx и CSP — сначала ergoms client-build и .env, потом правка кода
+alwaysApply: false
 ---
 
 # Диагностика до правки кода

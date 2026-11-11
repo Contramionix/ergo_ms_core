@@ -403,7 +403,7 @@ ADMIN_PASSWORD=admin
 | К3 | `secrets.no_defaults` | `standard` |
 | В1 | `auth.login_throttle` | `standard` |
 | В2 | `auth.reset_code_policy` | `standard` |
-| В3 | `messenger.access_default` | `standard` |
+| В3 | `chat.access_default` | `standard` |
 | В4 | `realtime.token_type`, `realtime.origin_validation`, `realtime.device_binding` | `standard` |
 | В5 | `broker.redis_password` | `hardened` |
 | В6 | `token.lifetime_required`, `token.rotate_refresh`, `token.revoke_on_logout` | `standard` |

@@ -1,0 +1,53 @@
+---
+description: UI ядра — Меню действий — DropDown
+alwaysApply: false
+---
+
+## Меню действий — DropDown
+
+Компонент: `@/components/DropDown.vue`.
+
+Выпадающее меню **действий** (редактировать, удалить, экспорт), не выбор значения из списка. Слоты `#main` (кнопка-триггер) и `#list` (пункты `<li><a class="dropdown-item">`).
+
+Триггер **bare**: без padding/hover на обёртке — размер и хром задаёт слот `#main`. Меню телепортируется в `body`, позиция адаптируется к viewport (flip вверх, clamp). Не обходи `.dropdown-button` через `:deep` в модуле.
+
+| Prop | Когда |
+|------|-------|
+| `compact` | компактные пункты (⋯ у строк/карточек) |
+| `dropdown-menu-class="dropdown-menu-end"` | выравнивание вправо от триггера |
+| `menu-min-width` | минимальная ширина меню (по умолчанию 160) |
+| `offset="0,N"` | зазор снизу/сверху, px |
+| `placement="right"` | открыть справа от триггера (длинные каталоги) |
+
+### Когда DropDown, а когда SelectBox
+
+| Сценарий | Компонент |
+|----------|-----------|
+| Выбрать значение поля формы, фильтра, статуса | `SelectBox` — [`select-box.mdc`](select-box.mdc) |
+| Кнопка «⋯» с 2–5 действиями над строкой/карточкой | `DropDown` + `compact` |
+| Несколько фильтров под одной кнопкой «Фильтры» | `FilterMenu` — [`filter-menu.mdc`](filter-menu.mdc) |
+
+### Базовый пример
+
+```vue
+<script setup>
+import DropDown from '@/components/DropDown.vue'
+import { MoreHorizontal, Edit, Trash2 } from '@lucide/vue'
+</script>
+
+<template>
+  <DropDown dropdown-menu-class="dropdown-menu-end" compact>
+    <template #main>
+      <button type="button" class="btn btn-link p-0" aria-label="Действия">
+        <MoreHorizontal :size="18" />
+      </button>
+    </template>
+    <template #list>
+      <li><a class="dropdown-item" href="#" @click.prevent="onEdit"><Edit :size="16" /><span>Редактировать</span></a></li>
+      <li><a class="dropdown-item" href="#" @click.prevent="onDelete"><Trash2 :size="16" /><span>Удалить</span></a></li>
+    </template>
+  </DropDown>
+</template>
+```
+
+Эталон: checklist/dropdown в модуле — `modules/<name>/client/components/…` с `DropDown` ядра.

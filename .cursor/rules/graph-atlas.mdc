@@ -1,0 +1,42 @@
+---
+description: UI ядра — Атлас — GraphAtlas
+alwaysApply: false
+---
+
+## Атлас — GraphAtlas
+
+Компонент: [`GraphAtlas.vue`](../../core/client/src/components/GraphAtlas.vue). Холст Canvas 2D + d3: панорама, масштаб, полный экран, кнопка «Фильтры». Данные, фильтры и боковая карточка — у родителя. Не копируй локальный движок графа в модуле.
+
+```vue
+<script setup>
+import GraphAtlas from '@/components/GraphAtlas.vue'
+</script>
+
+<template>
+  <GraphAtlas
+    :data="graph"
+    :filters="filters"
+    :strings="strings"
+    :focus-id="focusId"
+    @select="onSelect"
+  >
+    <template #filters>…</template>
+    <template #panel>…</template>
+  </GraphAtlas>
+</template>
+```
+
+Снимок `data`: массивы `nodes` / `edges` / `clusters` (и опционально `group_clusters`). Узел: `[id, name, hubFlag, cluster, x, y, occ, deg, …]`. Ребро: `[source, target, kind, weight]`. Слой фильтра — `both` | `hub` | `leaf`, не доменные имена модуля. Загрузка снимка — GET родителя, не внутри компонента.
+
+| Prop / слот | Когда |
+|------|-------|
+| `data` | снимок графа |
+| `filters` | `layers`, `kinds`, `wmin`, `iso`, `allEdges`, `query`, `areas` |
+| `strings` | подписи движка (группы связей, пустые состояния) |
+| `embed` | ниже холст на карточке сущности; вместе с `focusId` или `egoIds` рисует только 1 шаг вокруг якорей, кадр вписывает эту окрестность |
+| `focusId` | посадка на узел (`public_id`); на полном атласе — перелёт только при первом mount |
+| `egoIds` | якоря окрестности (`public_id`); если пусто, а `embed` и `focusId` заданы, якорь — `focusId` |
+| `#filters` / `#panel` / `#hint` | доменные фильтры, карточка, подсказка |
+| `#loading` / `#error` / `#empty` | состояния загрузки |
+
+**Запрещено:** вызывать API модуля из `GraphAtlas`; хардкодить имена модулей в движке; iframe, Google Fonts и CDN на холсте.

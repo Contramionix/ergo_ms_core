@@ -183,8 +183,14 @@ async def initialize_config():
     API_BASE_URL = f'http://{api_host}:{api_port}'
 
     if admin_login and admin_password:
-        AUTH_TOKEN = await authenticate_and_get_token(API_BASE_URL, admin_login, admin_password)
-        DEFAULT_USER_ID = decode_user_id_from_jwt(AUTH_TOKEN) or 1
+        try:
+            AUTH_TOKEN = await authenticate_and_get_token(API_BASE_URL, admin_login, admin_password)
+            DEFAULT_USER_ID = decode_user_id_from_jwt(AUTH_TOKEN) or 1
+        except Exception as e:
+            # Вход нужен только для user id в токене загрузки. Падение до stdio даёт в Cursor 0 tools.
+            AUTH_TOKEN = None
+            DEFAULT_USER_ID = 1
+            print(f'[WARNING] Авторизация API недоступна, user id по умолчанию: {e}', file=sys.stderr)
     else:
         AUTH_TOKEN = None
         DEFAULT_USER_ID = 1

@@ -1,0 +1,62 @@
+---
+paths:
+  - "core/.github/**"
+  - ".gitmodules"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Community-репозиторий `core/.github`
+
+Submodule [`ergoms/.github`](https://github.com/ergoms/.github): профиль организации, CONTRIBUTING / SECURITY / SUPPORT, шаблоны issues и PR. В мета-репозитории путь — `core/.github` (см. `.gitmodules`).
+
+## Кратко
+
+- Инициализация: `setup-full` / `ergoms setup` и `ergoms update-submodules` (список `DEFAULT_CORE_SUBMODULES` в [`host_steps.py`](../../core/deployment/lifecycle/steps/host_steps.py))
+- Deploy (`deploy-api` / `deploy-client` / `deploy-all`) **не** обновляет `.github` — только runtime-ядро
+- Источник правды по продукту — `.docs/` и код; `core/.github` — **краткие** community-тексты и ссылки, не копия всей документации
+- При смене онбординга, безопасности, поддержки или соглашений по PR в системе — **проверь и при необходимости обнови** файлы в `core/.github`
+
+## Когда синхронизировать
+
+| Изменилось в системе | Что проверить в `core/.github` |
+|----------------------|--------------------------------|
+| Быстрый старт, `setup-full`, команды ergoms (README, `.docs/cli.md`, `.docs/development.md`) | [`CONTRIBUTING.md`](../../core/.github/CONTRIBUTING.md), [`profile/README.md`](../../core/.github/profile/README.md) |
+| Политика безопасности, media_api, токены, `public_id` (`.docs/security*.md`, [`security.mdc`](../../.cursor/rules/security.mdc)) | [`SECURITY.md`](../../core/.github/SECURITY.md) |
+| Куда писать за помощью, оглавление `.docs/` | [`SUPPORT.md`](../../core/.github/SUPPORT.md) |
+| Обзор ядра / модулей / ModuleBridge для внешней аудитории | [`profile/README.md`](../../core/.github/profile/README.md) |
+| Соглашения коммитов / PR (`.cursorrules`, процесс вклада) | [`CONTRIBUTING.md`](../../core/.github/CONTRIBUTING.md), шаблоны в `.github/` внутри submodule |
+| Нормы общения в issues/PR | [`CODE_OF_CONDUCT.md`](../../core/.github/CODE_OF_CONDUCT.md) |
+
+Не дублируй длинные руководства из `.docs/` — оставляй краткий текст и ссылку на мета-репозиторий / `.docs/`.
+
+## Как править и зафиксировать
+
+1. Правишь файлы **внутри** `core/.github` (отдельный git root submodule).
+2. Коммит и push — в репозитории `ergoms/.github` (ветка `dev`, как в `.gitmodules`).
+3. Указатель submodule в корне `ergo_ms` — **только** если пользователь явно просит закрепить SHA. Иначе обёртку не трогай. См. [`git-commits.mdc`](../../.cursor/rules/git-commits.mdc).
+4. Локально подтянуть уже запушенные изменения: `ergoms update-submodules` (или `git submodule update --init --remote core/.github`).
+
+```text
+# BAD — community-политика только в .docs, SECURITY.md организации устарел
+# BAD — полный копипаст .docs/configuration.md в CONTRIBUTING.md
+# BAD — коммит содержимого core/.github только из корня ergo_ms без commit в submodule
+
+# GOOD — сначала .docs / правила ядра, затем краткое обновление core/.github + pointer
+# GOOD — в SUPPORT.md ссылка на README / .docs мета-репозитория
+```
+
+## Запрещено
+
+- Класть в `core/.github` секреты, внутренние runbook’и prod, доменные детали установленных модулей
+- Тянуть `.github` в deploy-рецепты «на всякий случай»
+- Считать `core/.github` заменой `.docs/` или `.cursor/rules/`
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Архитектура, submodule | [`struct.mdc`](../../.cursor/rules/struct.mdc) |
+| Когда создавать документы | [`docs.mdc`](../../.cursor/rules/docs.mdc) |
+| Стиль текстов | [`writing-docs-and-rules.mdc`](../../.cursor/rules/writing-docs-and-rules.mdc) |
+| Безопасность | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| setup-full / update-submodules | [`lifecycle-pipeline.mdc`](../../.cursor/rules/lifecycle-pipeline.mdc) |

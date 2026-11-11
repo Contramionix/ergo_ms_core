@@ -1,0 +1,139 @@
+---
+paths:
+  - "core/client/**/*.vue"
+  - "modules/**/client/**/*.vue"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# Модальные окна
+
+## Контентные модалки — ModalCenter
+
+Все модалки с формой, таблицей, настройками — через `ModalCenter.vue` (`@/components/ModalCenter.vue`).
+
+### Запрещено
+
+- Свои оверлеи (`modal fade`, `position: fixed; inset: 0`)
+- Свой Teleport + backdrop
+- `document.body.style.overflow` ради модалки
+- Свои обработчики Esc и клика по фону
+
+### Standalone (управление с родителя)
+
+```vue
+<ModalCenter
+  standalone
+  modal-id="myModal"
+  title="Заголовок"
+  :visible="show"
+  @close="show = false"
+>
+  ...
+  <template #header-actions>
+    <button type="button" class="ui-btn ui-btn--secondary" @click="onDownload">Скачать</button>
+  </template>
+  <template #footer>...</template>
+</ModalCenter>
+```
+
+Слот `header-actions` — кнопки справа в шапке, перед крестиком. Так действие вроде «Скачать» не прячется в футере.
+
+Полезные props: `size` (sm/md/lg/xl/fullscreen), `close-on-esc`, `close-on-backdrop`, `show-close-button`, `dialog-style`, `backdrop-effect` (`dim` | `blur` | `both`), `backdrop-blur`.
+
+`ModalCenter` (standalone) автоматически управляет z-index через `@/js/utils/modalStack.js`: каждая открытая модалка получает уровень выше предыдущей. Подтверждения (`confirm.js`) и вложенные модалки работают без ручного `zIndex`.
+
+### Модуль с собственной палитрой
+
+В режиме `standalone` компонент телепортирует разметку в `body`, поэтому модалка оказывается **вне** `ModuleThemeScope` и теряет атрибут `data-ergo-module-theme` — цвета модуля к ней не применяются. В модуле с зарегистрированной темой рендери `ModalCenter` внутри области темы без `standalone` либо оборачивай содержимое модалки в `ModuleThemeScope`. Подробности — [`themes.mdc`](../../.cursor/rules/themes.mdc).
+
+Эталон multi-select picker (UI в ядре, домен в модуле): [`MemberPickerModal.vue`](../../core/client/src/components/MemberPickerModal.vue) + обёртка `modules/<name>/client/components/…MemberPickerModal.vue` — см. [`components.mdc`](../../.cursor/rules/components.mdc).
+
+---
+
+## Подтверждения да/нет — confirm.js
+
+**Не** подключай `<ConfirmDialog>` в компонентах. **Не** `window.confirm()` / `alert()`.
+
+Единый API — `@/js/utils/confirm.js`. Диалоги рендерятся глобально в `NotificationProvider.vue` (подключён в `App.vue`).
+
+### Базовое использование
+
+```javascript
+import { confirmAction, confirmDelete } from '@/js/utils/confirm.js'
+
+const ok = await confirmDelete('Удаление', 'Вы уверены, что хотите удалить запись?')
+if (!ok) return
+
+// или с опциями
+const ok = await confirmAction({
+  title: 'Отправить на проверку',
+  message: 'После отправки редактирование будет ограничено.',
+  confirmText: 'Отправить',
+  cancelText: 'Отмена',
+  variant: 'primary',           // primary | danger | warning
+  confirmCountdownSeconds: 5,   // кнопка «Подтвердить» заблокирована N сек
+  zIndex: 1060,                 // только при нестандартном слое; обычно не нужен — стек в modalStack.js
+})
+```
+
+### Выбор из нескольких действий
+
+```javascript
+import { confirmChoice } from '@/js/utils/confirm.js'
+
+const action = await confirmChoice({
+  title: 'Экспорт',
+  message: 'Выберите формат:',
+  choices: [
+    { label: 'Excel', value: 'xlsx' },
+    { label: 'CSV', value: 'csv' },
+  ],
+})
+if (!action) return
+```
+
+### Async-удаление с loading
+
+```javascript
+import { runWithConfirm } from '@/js/utils/confirm.js'
+
+await runWithConfirm(
+  { title: 'Удаление', message: 'Удалить элемент?', confirmText: 'Удалить', variant: 'danger' },
+  async () => { await apiClient.delete(url) },
+)
+```
+
+Для ручного loading: `setConfirmLoading(true/false)` + `closeConfirmDialog()`.
+
+### Где живёт UI
+
+| Слой | Файл |
+|------|------|
+| API | `@/js/utils/confirm.js` |
+| Рендер | `@/components/NotificationProvider.vue` → `ConfirmDialog`, `ChoiceDialog` |
+
+`<ConfirmDialog>` импортируется **только** в `NotificationProvider.vue`.
+
+### Исключения (свой confirm-UI)
+
+- Спецмодалки с таблицами/предпросмотром (в модуле: свой `ConfirmModal`, `DeleteRecordModal`, …)
+- Inline-modal внутри сложного виджета (`MultiVideoUploader.vue`)
+- Локальный метод `confirm()` в composable — не путать с browser API; предпочитай `confirmAction`
+
+---
+
+## Исключения (не ModalCenter)
+
+- Перетаскиваемые/ресайз модалки (BI)
+- Боковые панели (drawer, чат сбоку)
+- Сложный двухпанельный layout
+
+Нужен новый режим — расширяй `ModalCenter` в ядре, не копируй модалку в модуле.
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Клиент, toast, confirm | [`client_code.mdc`](../../.cursor/rules/client_code.mdc) |
+| Компоненты ядра | [`components.mdc`](../../.cursor/rules/components.mdc) |
+| Уведомления (ConfirmDialog в Provider) | [`notifications.mdc`](../../.cursor/rules/notifications.mdc) |

@@ -47,13 +47,19 @@ def http_exchange(
         return 0, {}, ''
 
 
-def wait_http(base_url: str, *, timeout_sec: float = 120.0, path: str = '/api/') -> None:
+def wait_http(
+    base_url: str,
+    *,
+    timeout_sec: float = 120.0,
+    path: str = '/api/',
+    expected_status: int | None = None,
+) -> None:
     deadline = time.monotonic() + timeout_sec
     url = base_url.rstrip('/') + path
     last = 'no attempt'
     while time.monotonic() < deadline:
         status = http_status(url, timeout=10.0)
-        if status != 0:
+        if status != 0 and (expected_status is None or status == expected_status):
             return
         last = f'status={status}'
         time.sleep(0.5)

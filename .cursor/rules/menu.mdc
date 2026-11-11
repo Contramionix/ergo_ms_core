@@ -69,7 +69,7 @@ Composables UI sidebar: `useMenuWidth`, `useMenuNavigation`, `useMenuCollapsedPr
 | Seed separator | `{module_source}::separator::{slug(name)}` |
 | Админ | `admin::{public_id}` / `admin::separator::{public_id}` |
 
-`restore_menu` и `clear_module_items` удаляют seed-каталог, но не `MenuLayoutPlacement` / `MenuSeparatorLayout`; админские `admin::*` пункты сохраняются. Для вынесенного модуля ядро сначала берёт снимок с процесса (`bridge.all('menu.catalog')`), и только если соседа нет — проигрывает миграции с диска ядра.
+`restore_menu` и `clear_module_items` удаляют seed-каталог, но не `MenuLayoutPlacement` / `MenuSeparatorLayout`; админские `admin::*` пункты сохраняются. Для вынесенного модуля ядро сначала берёт снимок с процесса (`bridge.all('menu.catalog')`), и только если соседа нет — проигрывает миграции с диска ядра. Имя в `DISABLED_MODULES` прячет пункты, только когда процесса модуля нет: `MICROSERVICE_MODULES` и ключ `BRIDGE_SERVICE_URLS` оставляют вкладки в меню пользователя.
 
 ## Миграция меню — базовый пример
 

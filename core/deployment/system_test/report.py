@@ -33,5 +33,9 @@ class SuiteReport:
     def skipped(self) -> list[CaseResult]:
         return [item for item in self.results if item.status == 'skip']
 
-    def exit_code(self) -> int:
-        return 1 if self.failed else 0
+    def exit_code(self, *, strict: bool = False) -> int:
+        if self.failed:
+            return 1
+        if strict and self.skipped:
+            return 1
+        return 0

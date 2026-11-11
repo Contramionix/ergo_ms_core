@@ -1,0 +1,85 @@
+---
+paths:
+  - "modules/**/mcp/**"
+  - ".cursor/mcp*.yaml"
+  - ".cursor/mcp*.py"
+---
+<!-- Сгенерировано .claude/scripts/sync_claude_rules.py из .cursor/rules. Не редактировать. -->
+
+# MCP-серверы (Cursor)
+
+MCP даёт агенту Cursor инструменты для работы с API, файлами и сервисами проекта. **Один модуль — один MCP-сервер — одна строка** в Settings → Tools & MCP.
+
+## Кратко
+
+- Код MCP модуля — только в `modules/<имя>/mcp/` (`manifest.yaml` + `server.py`).
+- Ядро: [`.cursor/mcp.registry.yaml`](../../.cursor/mcp.registry.yaml), внутренняя сборка [`.cursor/mcp_sync.py`](../../.cursor/mcp_sync.py), launcher [`.cursor/mcp_launcher.js`](../../.cursor/mcp_launcher.js).
+- Подхват в Cursor — расширение [`.vscode/extensions/module-mcp/`](../../.vscode/extensions/module-mcp/) (**ERGO MS Module Cursor MCP**): `ergoms install-extensions`, Reload Window.
+- **Основной путь:** `vscode.cursor.mcp.registerServer`. API не принимает рабочую папку и стартует процесс из домашнего каталога, поэтому расширение подставляет абсолютные пути (launcher, `.` у filesystem) и на Windows запускает `npx` через `node.exe` и `npx-cli.js`, а не через `npx.cmd`. [`.cursor/mcp.json`](../../.cursor/mcp.json) при доступном API **не перезаписывается** (кроме однократной очистки серверов ERGO из файла).
+- Включённые серверы — в `workspaceState` расширения. Включение: **ERGO MS: Enable MCP Servers**. Sync: **ERGO MS: Sync Module Cursor MCP**. Output → **ERGO MS Module MCP**.
+- **Fallback** (нет Cursor MCP API): запись в `mcp.json` **только при реальном diff**.
+- Правила модулей Cursor читает из `modules/<имя>/.cursor/rules/` сам ([`module-cursor-rules.mdc`](../../.cursor/rules/module-cursor-rules.mdc)). Расширение module-rules только снимает старые копии плагинов.
+- Пользовательских команд `ergoms mcp-sync` / `mcp-list` **нет**.
+
+## Обязательно
+
+| Что | Где |
+|-----|-----|
+| Manifest | `modules/<имя>/mcp/manifest.yaml` |
+| Сервер | `modules/<имя>/mcp/server.py` |
+| Имя в Cursor | `ergo-module-<kebab-case>` (уникально в проекте) |
+| Tools | `<module>_<action>` или устоявшиеся префиксы пакета модуля |
+| Секреты | из `.env` / `env/mcp.env` (`ADMIN_LOGIN`, `ADMIN_PASSWORD`), не в manifest и не в коде. Те же поля — вход во встроенном браузере Cursor ([`cursor-browser.mdc`](../../.cursor/rules/cursor-browser.mdc)) |
+
+### manifest.yaml
+
+```yaml
+module: <name>
+server:
+  name: ergo-module-<kebab-name>
+  description: "MCP модуля <name> — кратко о назначении"
+  script: mcp/server.py
+```
+
+`script` — путь **относительно корня модуля**. Файл должен существовать, иначе discovery пропустит manifest.
+
+### server.py
+
+- `Server("ergo-module-<имя>")` — то же имя, что в manifest.
+- stdio через `mcp.server.stdio`; зависимости — Poetry проекта (`mcp`, `httpx`).
+- Запуск: `node .cursor/mcp_launcher.js modules/<имя>/mcp/server.py`.
+- Без Django init, если не нужен; конфиг — чтение `.env` как в [`.cursor/mcp_api_server.py`](../../.cursor/mcp_api_server.py).
+
+### Ядерные MCP
+
+Только в `.cursor/`: `ergo-api`, `ergo-media-api`, `ergo-filesystem` — декларация в `mcp.registry.yaml`.
+
+**БД:** тип `databases_yaml` в реестре разворачивается в строки `ergo-database-<секция>` по ключам корневого `databases.yaml`. После правки `databases.yaml` расширение перерегистрирует MCP (watcher) или команда Sync Module Cursor MCP.
+
+## Запрещено
+
+- MCP-код модуля в `.cursor/mcp_<module>_*.py`
+- Один gateway на все модули
+- Прямые импорты между модулями в MCP (HTTP, bridge — да)
+- Секреты в manifest, git или hardcode
+- Предлагать `ergoms mcp-sync` / `mcp-list` — их нет; только расширение module-mcp
+
+## Эталоны
+
+| Что | Файл |
+|-----|------|
+| Рабочий модульный MCP | `modules/<name>/mcp/` (manifest + server) |
+| Шаблон manifest | `modules/<name>/mcp/manifest.yaml` |
+| Шаблон server | `modules/<name>/mcp/server.py.example` |
+| Ядерный MCP | [`.cursor/mcp_api_server.py`](../../.cursor/mcp_api_server.py) |
+| Расширение | [`.vscode/extensions/module-mcp/`](../../.vscode/extensions/module-mcp/) |
+
+## Связанные правила
+
+| Тема | Файл |
+|------|------|
+| Модули | [`modules.mdc`](../../.cursor/rules/modules.mdc) |
+| Rules модулей | [`module-cursor-rules.mdc`](../../.cursor/rules/module-cursor-rules.mdc) |
+| MCP модуля | `modules/<name>/.cursor/rules/` + hook discovery |
+| Безопасность | [`security.mdc`](../../.cursor/rules/security.mdc) |
+| ergoms | [`no-direct-manage-py.mdc`](../../.cursor/rules/no-direct-manage-py.mdc) |

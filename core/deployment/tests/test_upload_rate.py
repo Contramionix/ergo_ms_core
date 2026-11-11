@@ -11,6 +11,7 @@ from upload_rate import (
     build_rate_limit_conf,
     media_rate_to_nginx,
     resolve_upload_rates,
+    upload_location_limit_lines,
 )
 
 
@@ -58,6 +59,12 @@ class UploadRateHelpersTests(unittest.TestCase):
         self.assertNotIn('${ERGO_RATE_LIMIT_CONF}', text)
         self.assertNotIn('${ERGO_UPLOAD_ZONE_RATE}', text)
         self.assertEqual(text.count('limit_req_zone $binary_remote_addr zone=ergo_upload'), 1)
+        self.assertIn('limit_conn_zone $binary_remote_addr zone=ergo_upload_conn:10m;', text)
+
+    def test_upload_location_uses_own_conn_zone(self) -> None:
+        lines = upload_location_limit_lines(burst=25)
+        self.assertIn('limit_conn ergo_upload_conn 10;', lines)
+        self.assertNotIn('ergo_conn', lines)
 
 
 class MergeAdminUploadRateTests(unittest.TestCase):

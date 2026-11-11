@@ -5,44 +5,19 @@ alwaysApply: true
 
 # Изоляция ядра от модулей
 
-Ядро (`core/api`, `core/client`, `core/media_api`, `core/deployment`) **не знает** домен модулей. Связь — generic ModuleBridge и hook discovery. Проверка: `ergoms core-rules-check` (весь `core/` и `.cursor/rules/`, включая комментарии). Эталон логина и каталог hook’ов — [`modules.mdc`](modules.mdc); контракты — [`module-contracts.mdc`](module-contracts.mdc).
+Ядро (`core/api`, `core/client`, `core/media_api`, `core/deployment`) не знает домен модулей. Связь — ModuleBridge и hook discovery. Проверка: `ergoms core-rules-check`. Каталог hook’ов — [`modules.mdc`](modules.mdc), контракты — [`module-contracts.mdc`](module-contracts.mdc).
 
-## Кратко
-
-- Нет `from modules.<имя>...` и static import из `modules/` в бизнес-коде ядра
-- Нет имён установленных модулей в runtime **и** в комментариях/docstring ядра и `.cursor/rules/` — только плейсхолдеры `<name>`
-- Нет зашитых JWT claim / моделей / маршрутов модуля; ядро кладёт **произвольный** dict claims
-- Данные модуля в сценарии ядра → platform-контракт + `bridge.call` / hook
-- Связь только модуль↔модуль → **не** в каталог ядра (`module_contracts` / `core/…/integrations/`)
-- Имена контрактов ядра — generic (`session.*`, `audit.*`, `core.*`), не `<имя_модуля>.*`
-
-## Запрещено
+- Нет `from modules.<имя>...` и static import из `modules/` в бизнес-коде ядра.
+- Нет имён установленных модулей в runtime, комментариях и docstring ядра и `.cursor/rules/` — только `<name>`.
+- Нет зашитых JWT claim, моделей и маршрутов модуля. Ядро кладёт произвольный dict claims.
+- Данные модуля в сценарии ядра идут через platform-контракт и `bridge.call` или hook.
+- Связь только модуль↔модуль не клади в каталог ядра. Имена контрактов ядра — `session.*`, `audit.*`, `core.*`.
 
 ```python
+# GOOD
+restore_claims = bridge.call(SESSION_RESTORE_CLAIMS, user=user) or {}
 # BAD
 from modules.<name>.api.models import SomeEntity
-claims = bridge.call('<name>.restore_session', user=user)
-# BAD — slug модуля в комментарии
-# Django AppConfig default: "<name>".title()
 ```
 
-```javascript
-// BAD
-import { useSomeStore } from '@/modules/<name>/client/js/store.js'
-export const HOST_SETTINGS_ADDITIONAL_PANELS_GROUP = 'host_settings.additional_panels'
-```
-
-```python
-# GOOD — opaque claims, ключи dict ядру неизвестны
-restore_claims = bridge.call(SESSION_RESTORE_CLAIMS, user=user) or {}
-```
-
-Новая связь ядро↔модуль — сначала константа в каталоге, потом `bridge` / hook. Доменный loader модуля — в `modules/<name>/`, не в `core/deployment/scripts/`.
-
-## Связанные правила
-
-| Тема | Файл |
-|------|------|
-| Архитектура, hook’и | [`struct.mdc`](struct.mdc), [`modules.mdc`](modules.mdc) |
-| Каталог контрактов | [`module-contracts.mdc`](module-contracts.mdc) |
-| Вынос / FK / isolated | [`modularization.mdc`](modularization.mdc) |
+Новая связь ядро↔модуль начинается с константы в каталоге. Доменный loader модуля живёт в `modules/<name>/`.

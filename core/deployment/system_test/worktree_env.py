@@ -80,6 +80,7 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
         super().__init__(workspace, run_dir, prefix)
         self._fingerprint = workspace_config_fingerprint(workspace)
         self._used_worktree = False
+        self._configured = False
         self._ports: dict[str, int] = {}
         self._api = None
         self._client = None
@@ -89,7 +90,7 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
         self._create_tree()
         self._link_download_cache()
         self._write_throwaway_config()
-        result = self.run_ergoms('setup-full', timeout=7200)
+        result = self.run_ergoms('setup', timeout=7200)
         if result.returncode != 0:
             detail = ((result.stderr or '') + '\n' + (result.stdout or ''))[-2000:]
             raise RuntimeError(detail or f'setup-full exit {result.returncode}')
@@ -141,10 +142,11 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
         self._client = None
         stop_api(self._api)
         self._api = None
-        try:
-            self.run_ergoms('clean', timeout=600)
-        except Exception:
-            pass
+        if self._configured and self.tree_root.is_dir():
+            try:
+                self.run_ergoms('clean', timeout=600)
+            except Exception:
+                pass
         if self._used_worktree and self.tree_root.is_dir():
             subprocess.run(
                 ['git', 'worktree', 'remove', '--force', str(self.tree_root)],
@@ -230,6 +232,7 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
             shutil.copytree(source, target, ignore=ignore, dirs_exist_ok=True)
 
     def _link_download_cache(self) -> None:
+        """Копия кэша: clean теста не должен удалять архивы исходного проекта."""
         source = cache_dir(self.workspace) / 'downloads'
         if not source.is_dir():
             return
@@ -237,10 +240,7 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
         target = target_parent / 'downloads'
         if target.exists() and not _is_placeholder_dir(target):
             return
-        try:
-            link_host_dir(source, target)
-        except OSError:
-            pass
+        shutil.copytree(source, target, dirs_exist_ok=True)
 
     def _link_host_python(self) -> None:
         pairs = (
@@ -248,6 +248,10 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
             (
                 self.workspace / 'virtual_env' / 'packages' / 'python',
                 self.tree_root / 'virtual_env' / 'packages' / 'python',
+            ),
+            (
+                self.workspace / 'virtual_env' / 'packages' / 'docker-compose',
+                self.tree_root / 'virtual_env' / 'packages' / 'docker-compose',
             ),
         )
         for source, target in pairs:
@@ -286,8 +290,10 @@ class HostWorktreeEnvironment(IsolatedEnvironment):
         (self.tree_root / '.env').write_text(env_text, encoding='utf-8')
         db_path = (self.run_dir / 'scenario.sqlite3').as_posix()
         (self.tree_root / 'databases.yaml').write_text(
-            'default:\n'
-            '  engine: sqlite\n'
-            f'  name: {db_path}\n',
+            'databases:\n'
+            '  default:\n'
+            '    engine: sqlite\n'
+            f'    name: {db_path}\n',
             encoding='utf-8',
         )
+        self._configured = True
