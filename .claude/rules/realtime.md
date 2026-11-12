@@ -18,7 +18,7 @@ paths:
 - `ERGO_REALTIME=sse` — push через **Server-Sent Events** (`GET /api/realtime/stream/`)
 - `ERGO_REALTIME=http_polling` — REST + периодический polling (`GET /api/realtime/sync/`)
 - Публикация событий — **`RealtimeHub.publish`** (`core/api/src/core/realtime/hub.py`), не прямой `group_send` из бизнес-кода
-- Клиент SSE — **`getRealtimeClient()`** из `@/js/realtime/RealtimeClient.js`, auth через `Authorization: Bearer` (не token в URL)
+- Клиент SSE — **`getRealtimeClient()`** из `@/js/realtime/RealtimeClient.js`, auth через `Authorization: Bearer` (не token в URL). Поток `GET /api/realtime/stream/` держит одна вкладка (`sseTabLeader.js`); остальные того же сайта получают события через `BroadcastChannel`. Закрытие потока стирает topics пользователя, только если это был последний живой поток. Новый лидер и остальные вкладки заново шлют `subscribe` своих тем
 - JWT на WebSocket — только в первом envelope `{ type: 'ws_auth', payload: { token } }`, ответ `{ type: 'ws_auth_ok', ... }`
 - В режиме `websocket` создание, правка текста и удаление сообщения мессенджера идут кадрами `send_message` / `edit_message` / `delete_message` в комнату; REST — для вложений, SSE и `http_polling`
 

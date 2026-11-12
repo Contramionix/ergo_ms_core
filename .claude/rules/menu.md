@@ -119,7 +119,7 @@ bridge.provideMany(MENU_ITEM_TRAILING_GROUP, '<name>_unread', {
 
 ## Меню приложений (AppsMenu)
 
-Не путать с боковым меню. Сетка приложений в toolbar — ModuleBridge-группа `apps.menu.items` ([`appsMenu.js`](../../core/client/src/integrations/appsMenu.js)). Кнопка скрыта, пока пунктов нет; повторная загрузка remote (502) и ожидание снимка прав не отменяются. Пункт можно ограничить UX-полями `permissionModule` + `permission` или `isVisible` (глобальный админ проходит через `hasModulePermission`). Без этих полей пункт виден всем вошедшим. Пока нет access-токена или снимка прав — список не считают окончательно пустым (иначе кнопка пропадает до F5). Сервер всё равно проверяет доступ при открытии. Плавающие виджеты (мини-чат) — отдельно: `shell.floating_widgets` + [`FloatingWidgetsHost`](../../core/client/src/components/FloatingWidgetsHost.vue), не через LayoutPlugin/offcanvas.
+Не путать с боковым меню. Сетка приложений в toolbar — ModuleBridge-группа `apps.menu.items` ([`appsMenu.js`](../../core/client/src/integrations/appsMenu.js)). Кнопка видна, если уже есть пункты или remotes ещё не загружены. `remoteEntry` качается при открытии сетки, не на каждой странице. Повтор при 502 и ожидание снимка прав не отменяются. Пункт можно ограничить UX-полями `permissionModule` + `permission` или `isVisible` (глобальный админ проходит через `hasModulePermission`). Без этих полей пункт виден всем вошедшим. Пока нет access-токена или снимка прав — список не считают окончательно пустым (иначе кнопка пропадает до F5). Сервер всё равно проверяет доступ при открытии. Плавающие виджеты (мини-чат) — отдельно: `shell.floating_widgets` + [`FloatingWidgetsHost`](../../core/client/src/components/FloatingWidgetsHost.vue), не через LayoutPlugin/offcanvas.
 
 ## Админка меню
 
