@@ -77,6 +77,7 @@ modules/<имя>/
 ├── model_providers.yaml     # адаптер локального индекса моделей (если модуль — провайдер)
 ├── vscode.tasks.yaml        # задачи Run Task + include_in setup-full/start-all (необязательно)
 ├── cursor_hooks.yaml        # команды на события Cursor, диспетчер ядра без имён модулей (необязательно)
+├── ide_actions.yaml         # свои проверки для уведомления IDE, диспетчер ядра без имён модулей (необязательно)
 ├── integrations.yaml        # depends: requires (обязательные) / extends (опциональные)
 ```
 
@@ -106,6 +107,7 @@ modules/<имя>/
 | Индекс моделей и runtime | `runtime_requirements.yaml`, `model_providers.yaml` | [runtime-models.md](../../.docs/runtime-models.md) |
 | Run Task / setup-full | `vscode.tasks.yaml` | [`module-vscode-tasks.mdc`](../../.cursor/rules/module-vscode-tasks.mdc) |
 | События Cursor | `cursor_hooks.yaml` | [`cursor_module_hooks.py`](../../core/deployment/scripts/cursor_module_hooks.py) |
+| Уведомления IDE | `ide_actions.yaml` | [`ide_actions.py`](../../core/deployment/scripts/ide_actions.py) |
 | Схема PostgreSQL | `api/schema.yaml` | [`modularization.mdc`](../../.cursor/rules/modularization.mdc) |
 | HTTP-мост | `api/bridge_manifest.yaml` | [`modularization.mdc`](../../.cursor/rules/modularization.mdc) |
 | Поиск | `search_indexes.py` | [`discovery.py`](../../core/api/src/core/search/discovery.py) |
@@ -125,6 +127,8 @@ Portable-бинарники модуля (ollama, ffmpeg и т.п.) — толь
 Задачи VS Code / Cursor (Run Task) и участие в **Setup Full** / **Start All** — только через `vscode.tasks.yaml` (`include_in: setup-full` / `start-all`): hook модульности, не правка монолита ядра. Подробности — [`module-vscode-tasks.mdc`](../../.cursor/rules/module-vscode-tasks.mdc); формат shell-задач ядра — [`vscode-tasks.mdc`](../../.cursor/rules/vscode-tasks.mdc).
 
 Команды модуля на событие Cursor (`stop` и другие) объявляются в `cursor_hooks.yaml`. Диспетчер [`cursor_module_hooks.py`](../../core/deployment/scripts/cursor_module_hooks.py) обходит каталоги модулей, читает этот файл и запускает команду из каталога модуля. Имя модуля в ядре не пишется. Ответ команды с `followup_message` возвращается агенту.
+
+Свои проверки для уведомления VS Code и Cursor объявляются в `ide_actions.yaml`. Диспетчер [`ide_actions.py`](../../core/deployment/scripts/ide_actions.py) запускает команду секции `check` из каталога модуля. Команда печатает JSON `{"actions":[{"id","command","title"}]}`. Ядро само сообщает о неприменённых миграциях, пакетах Python и npm и коммитах, которые есть в remote-tracking, но не влиты. Расширение `.vscode/extensions/actions` показывает это при открытии окна. Текст уведомления — по языку интерфейса устройства (`ru`, `en`, `fr`), иначе русский.
 
 Вложенные подприложения (`client/<раздел>/js/routes.js`) подхватываются для маршрутов и `integrations.js`. Файлы `endpoints.js`, `permission-rules.js` — только из `client/js/` (или re-export оттуда).
 

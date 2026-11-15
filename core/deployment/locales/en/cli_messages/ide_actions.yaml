@@ -1,0 +1,4 @@
+ide_actions_migrations_skipped: Could not check migrations.
+ide_actions_python_check_failed: Could not compare Python packages with the lock file.
+ide_actions_npm_check_failed: Could not compare npm packages with the manifests.
+ide_actions_module_check_failed: "IDE action check failed: {path}"

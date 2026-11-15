@@ -1,0 +1,28 @@
+{
+  "name": "ergo-ms-actions",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.0.0",
+  "publisher": "ergo-ms",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "extensionKind": ["workspace"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:core/deployment/commands.conf"
+  ],
+  "main": "./extension.js",
+  "l10n": "./l10n",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ergo-ms-actions.check",
+        "title": "%command.check.title%"
+      }
+    ]
+  }
+}

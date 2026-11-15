@@ -574,6 +574,8 @@ sections:
   commands:
   - name: install-extensions
     summary: Установить расширения из списка проекта
+  - name: ide-actions
+    summary: JSON действий для IDE — неприменённые миграции, пакеты и неподтянутые коммиты
   - name: update-vsix
     summary: Обновить VSIX-расширения
   - name: uninstall-extensions

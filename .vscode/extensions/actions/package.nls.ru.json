@@ -1,0 +1,5 @@
+{
+  "extension.displayName": "ERGO MS: нужные действия",
+  "extension.description": "Сообщает, если не применены миграции, не стоят пакеты или не подтянуты коммиты",
+  "command.check.title": "ERGO MS: Проверить нужные действия"
+}

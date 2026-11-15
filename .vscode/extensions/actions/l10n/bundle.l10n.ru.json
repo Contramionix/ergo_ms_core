@@ -1,0 +1,12 @@
+{
+  "Python environment is not installed.": "Окружение Python не установлено.",
+  "Python packages do not match the lock file.": "Пакеты Python не совпадают с lock-файлом.",
+  "npm packages do not match the manifests.": "Пакеты npm не совпадают с манифестами.",
+  "{0} migrations are not applied.": "Не применено миграций: {0}.",
+  "Commits are not pulled: {0}.": "Не подтянуты изменения: {0}.",
+  "{0} actions need attention.": "Нужны действия: {0}.",
+  "Run": "Выполнить",
+  "Later": "Позже",
+  "Review": "Разобрать",
+  "Required actions": "Нужные действия"
+}

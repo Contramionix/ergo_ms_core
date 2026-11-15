@@ -1,0 +1,12 @@
+{
+  "Python environment is not installed.": "L'environnement Python n'est pas installé.",
+  "Python packages do not match the lock file.": "Les paquets Python ne correspondent pas au fichier lock.",
+  "npm packages do not match the manifests.": "Les paquets npm ne correspondent pas aux manifestes.",
+  "{0} migrations are not applied.": "Migrations non appliquées : {0}.",
+  "Commits are not pulled: {0}.": "Commits non récupérés : {0}.",
+  "{0} actions need attention.": "Actions nécessaires : {0}.",
+  "Run": "Exécuter",
+  "Later": "Plus tard",
+  "Review": "Examiner",
+  "Required actions": "Actions requises"
+}

@@ -63,6 +63,7 @@ modules/<имя>/
 ├── process_roles.yaml          # роли в ergoms resource-usage
 ├── vscode.tasks.yaml           # Run Task + setup-full / start-all
 ├── cursor_hooks.yaml           # команды на события Cursor
+├── ide_actions.yaml            # свои проверки для уведомления IDE
 ├── integrations.yaml           # requires / extends между модулями
 ├── pyproject.toml              # Python-зависимости модуля
 └── client/package.json         # npm-зависимости клиента модуля
@@ -90,6 +91,7 @@ modules/<имя>/
 | Провайдер локальных моделей | `model_providers.yaml`; [runtime-models.md](runtime-models.md) |
 | Учёт процесса в resource-usage | `process_roles.yaml` |
 | Команда на событие Cursor | `cursor_hooks.yaml` |
+| Своя проверка для уведомления IDE | `ide_actions.yaml` |
 | Отдельная тема оформления | `theme-defaults.js` + `theme-bootstrap.scss` |
 | Инструменты агента Cursor | `mcp/` + `.cursor/rules/` |
 
@@ -277,6 +279,23 @@ stop:
 ```
 
 Если команда печатает JSON с полем `followup_message`, агент получает этот текст и продолжает правку. Запись в `.cursor/hooks.json` одна на все модули.
+
+### Уведомления IDE (`ide_actions.yaml`)
+
+Расширение **ERGO MS: нужные действия** при открытии окна показывает, что нужно сделать: применить миграции, поставить пакеты Python или npm, подтянуть коммиты. Текст уведомления берётся по языку интерфейса устройства: русский, английский или французский. Если язык устройства другой, текст русский. Общие проверки делает `ergoms ide-actions`. Модуль добавляет свою, не правя ядро:
+
+```yaml
+check:
+  - command: python -m tools.ide_status
+```
+
+Команда в каталоге модуля печатает JSON. Поле `title` — текст уведомления, `command` — что запустить из кнопки.
+
+```json
+{"actions":[{"id":"weights","title":"Нет локальных весов","command":"ergoms <name>:pull-weights"}]}
+```
+
+Отключённый модуль (`DISABLED_MODULES`) не проверяется. Коммиты сравниваются с уже скачанной веткой remote-tracking, без нового `git fetch`.
 
 ### OS-службы (`host_lifecycle.yaml`)
 

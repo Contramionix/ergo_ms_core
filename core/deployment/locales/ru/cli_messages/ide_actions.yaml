@@ -1,0 +1,4 @@
+ide_actions_migrations_skipped: Не удалось проверить миграции.
+ide_actions_python_check_failed: Не удалось сверить пакеты Python с lock-файлом.
+ide_actions_npm_check_failed: Не удалось сверить пакеты npm с манифестами.
+ide_actions_module_check_failed: "Проверка действий IDE не выполнилась: {path}"

@@ -551,6 +551,8 @@ sections:
   commands:
   - name: install-extensions
     summary: Installer les extensions de la liste du projet
+  - name: ide-actions
+    summary: JSON des actions IDE — migrations non appliquées, paquets et commits non récupérés
   - name: update-vsix
     summary: Mettre à jour les extensions VSIX
   - name: uninstall-extensions

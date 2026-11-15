@@ -1,0 +1,5 @@
+{
+  "extension.displayName": "ERGO MS : actions requises",
+  "extension.description": "Signale les migrations non appliquées, les paquets manquants et les commits non récupérés",
+  "command.check.title": "ERGO MS : Vérifier les actions requises"
+}

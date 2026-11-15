@@ -550,6 +550,8 @@ sections:
   commands:
   - name: install-extensions
     summary: Install extensions from the project list
+  - name: ide-actions
+    summary: JSON of IDE actions — unapplied migrations, packages, and commits not pulled
   - name: update-vsix
     summary: Update VSIX extensions
   - name: uninstall-extensions

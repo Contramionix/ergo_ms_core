@@ -1,0 +1,5 @@
+{
+  "extension.displayName": "ERGO MS Required Actions",
+  "extension.description": "Notifies when migrations, packages, or remote commits still need a developer action",
+  "command.check.title": "ERGO MS: Check required actions"
+}
